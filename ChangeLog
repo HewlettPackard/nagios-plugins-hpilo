@@ -1,0 +1,8 @@
+1.0.0 initial version.
+
+1.1.0 Support the active discovery. 
+
+1.1.1 Remove autom4te.cache folder.
+
+1.2.0 Support for RHEL6 and SLES11. Fixed some issues due to the older nagios under RHEL6 and SLES11.
+
