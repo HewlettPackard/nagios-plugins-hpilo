@@ -2,10 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT(nagios-plugins-hpilo, 1.2.0, adrian.huang@hp.com)
+AC_INIT(nagios-plugins-hpilo, 1.2.1, adrian.huang@hp.com)
 AC_CONFIG_SRCDIR([src/nagios_hpilo_engine.c])
 AC_CONFIG_HEADERS([config.h])
-AM_INIT_AUTOMAKE(nagios-plugins-hpilo, 1.2.0)
+AM_INIT_AUTOMAKE(nagios-plugins-hpilo, 1.2.1)
 
 # Checks for programs.
 AC_PROG_CC

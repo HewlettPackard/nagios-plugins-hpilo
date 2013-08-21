@@ -387,28 +387,43 @@ get_hlth_status_str (struct ilo_oid_list **oid_list_ptr, void *data)
 static enum Nagios_status
 get_redundant_status_str (struct ilo_oid_list **oid_list_ptr, void *data) 
 {
-  int status = ILO_RED_STATUS_NOT_RED;
+  int status = ILO_RED_STATUS_OTHER;
 
   struct ilo_snmp_priv *priv_ptr = NULL;
-  struct ilo_oid_list *oid_list = *oid_list_ptr; 
+  struct ilo_oid_list *oid_list = *oid_list_ptr;
 
   enum Nagios_status n_status = NAGIOS_UNKNOWN;
 
   char status_str[][16] = {"Other", "Non-Redundant", "Redundant"};
 
-  while (oid_list) 
-    {
+  int i;
 
-      /* Since one of all fans is in the redundant configuration,
-	it's a redundant configuration.  */
-      if (oid_list->integer == ILO_RED_STATUS_RED) 
-	{
-	  status = ILO_RED_STATUS_RED;
-	  break;
-	}
+  /* Find the redundant status by parsing each component. The paring 
+     sequence of the redundant status is:
+	ILO_RED_STATUS_RED --> ILO_RED_STATUS_NOT_RED.  */
+  for (i=ILO_RED_STATUS_RED;i>=ILO_RED_STATUS_NOT_RED;i--)
+    {	  
+      while (oid_list) 
+        {
 
-      oid_list = oid_list->next;
+	  /* Since one of all fans is in the redundant/non-redundant 
+	     configuration, it's a redundant/non-redundant configuration.  */
+          if (oid_list->integer == i) 
+	    {
+	      status = i;
+	      break;
+	    }
 
+          oid_list = oid_list->next;
+
+       }
+
+       /* Get the redundant status. Exit the "for" loop.  */
+       if (status == i)
+	       break;
+
+	/* Try again.  */
+	oid_list = *oid_list_ptr; 
     }
 
   /* Free the elements of the OID list in addition to the first 
@@ -416,16 +431,16 @@ get_redundant_status_str (struct ilo_oid_list **oid_list_ptr, void *data)
   oid_list = (*oid_list_ptr)->next;
   free_oid_list(oid_list);
 
-  status = (*oid_list_ptr)->integer;
+  /* Only one element remaining */
+  (*oid_list_ptr)->next = NULL;
+
   copy_str(&(*oid_list_ptr)->string, (*oid_list_ptr)->value_len, 
 	  status_str[status-1]);
 
   (*oid_list_ptr)->value_len = strlen((*oid_list_ptr)->string);
   (*oid_list_ptr)->type = ASN_OCTET_STR;
 
-  /* Only one element remaining */
-  (*oid_list_ptr)->next = NULL;
-
+  
   switch (status) 
     {
     case ILO_RED_STATUS_OTHER:
