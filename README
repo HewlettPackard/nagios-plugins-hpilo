@@ -13,6 +13,8 @@ Requirements:
 -------------
 - Net-snmp
 - snmptrapd
+- curl
+- nmap (version >= 5.51)
 - HP ProLiant Server 
 
 Features:
