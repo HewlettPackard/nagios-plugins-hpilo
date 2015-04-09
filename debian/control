@@ -1,0 +1,14 @@
+Source: nagios-plugins-hpilo
+Section: x11
+Priority: optional
+Maintainer: Chandrakant Hugar <chandrakant.hugar@hp.com>
+Build-Depends: debhelper (>= 7.0.50), libc6-dev-i386 [amd64], libwrap0, libsnmp-dev, linux32 [i386]
+Standards-Version: 1.4.0
+#Vcs-Git: git://git.debian.org/collab-maint/nagios-plugins-hpilo.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/nagios-plugins-hpilo.git;a=summary
+
+Package: nagios-plugins-hpilo
+Architecture: any
+Depends: nagios3 (>=3.0.0),nmap (>=5.20)
+Description: The Nagios plug-in for iLO agentless management
+ The Nagios plug-in for iLO agentless management aims to manage HP ProLiant servers within the data center by an automated manner. With the help of the plug-in, the administrator does not need to configure the nagios configuration file manually for all servers. If the data center has thousands of HP ProLiant servers (even more), the plug-in greatly saves the effort of configuring the servers' information manually. The plug-in provides the high-level health status for being managed servers. The administrator can easily identify the failed server within the data center.

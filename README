@@ -6,15 +6,13 @@ the administator does not need to configure the nagios configuration file
 (/nagios_etc_path/conf.d) manually. The plug-in automatically writes the 
 server configuration to the nagios configuration file 
 (/nagios_etc_path/cfg_dir/ilo.cfg, for example: /etc/nagios3/conf.d/ilo.cfg 
-under Ubuntu 13.04) once any of HP ProLiant servers is discovered 
+under Ubuntu 14.04) once any of HP ProLiant servers is discovered 
 within the data center.
 
 Requirements:
 -------------
 - Net-snmp
 - snmptrapd
-- curl
-- nmap (version >= 5.51)
 - HP ProLiant Server 
 
 Features:
@@ -43,6 +41,3 @@ Features:
 
 4) Categorize the preferred servers into the same host group.
 
-Installation:
-------------
-Read INSTALL file

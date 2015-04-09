@@ -1,0 +1,65 @@
+#!/bin/sh
+
+set -e
+case "$1" in
+	remove)
+
+SNMPTRAPD_CONF="/etc/snmp/snmptrapd.conf"
+HPILO_CFG_GEN="nagios_hpilo_cfg_generator"
+HPILO_TRAPS="nagios_hpilo_traps"
+
+# Find the nagios prefix
+nagios_prefix=`grep -i "^prefix=" /etc/init.d/nagios* | cut -d '=' -f 2`
+
+if [ "$nagios_prefix" = "" ]; then
+        nagios_cfg=`grep -E "=.*etc.*nagios.cfg" /etc/init.d/nagios* | cut -d '=' -f 2`
+else
+        nagios_cfg="$nagios_prefix/etc/nagios.cfg"
+fi
+
+# trim the double quotes
+nagios_cfg=`echo $nagios_cfg | tr -d '"'`
+
+nagios_path=`dirname $nagios_cfg`
+
+
+# remove the iLO configuration file
+find $nagios_path -name ilo.cfg -print | xargs rm -f
+
+# Find the line number of the ilo cfg_dir statement
+ilo_cfg_dir_line_no=`grep -n "cfg_dir=$nagios_path/ilo" $nagios_cfg | cut -d ':' -f 1`
+
+	if [ "$ilo_cfg_dir_line_no" != "" ]; then
+		sed -e "$ilo_cfg_dir_line_no d" $nagios_cfg > /tmp/tmp.txt
+		mv /tmp/tmp.txt $nagios_cfg
+	fi
+	
+# Remove the ilo cfg_dir 
+rm -rf $nagios_path/ilo
+
+
+# reload the configuration
+`find /etc/init.d/ -name "nagios*" -print` reload
+
+# Remove traphandle
+if [ -f "$SNMPTRAPD_CONF" ]; then
+cat $SNMPTRAPD_CONF |	sed -e "/$HPILO_CFG_GEN/d" | \
+			sed -e "/$HPILO_TRAPS/d" > /tmp/tmp.txt
+
+mv /tmp/tmp.txt $SNMPTRAPD_CONF
+fi
+
+#SNMPTRAPD=`which snmptrapd`
+SNMPTRAPD="/usr/sbin/snmptrapd"
+if [ -f "$SNMPTRAPD"  ]; then
+	echo -n "Restart snmptrapd\n"
+# restart snmptrapd
+	killall snmptrapd &> /dev/null
+	$SNMPTRAPD -C -c /etc/snmp/snmptrapd.conf -Lf /var/log/net-snmptrapd.log
+fi
+;;
+    *)
+	exit 0
+esac
+ exit 0
+#DEBHELPER#

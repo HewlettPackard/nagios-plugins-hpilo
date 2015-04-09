@@ -1,0 +1,11 @@
+nagios-plugins-hpilo (1.4.0-9) unstable; urgency=low
+
+  * Initial Debian packaging
+  * Udated rules file to resolve  build and instalation issues
+  * updated rules file to fix file permission issue
+  * postrm script to restart snmptrapd and remove ilo.cfg file.
+  * postins script added to create symbolic link in Ubuntu 12.04
+  * updated dependant library in control file
+  * fixed issue : added required library link for i686 and fixed lockfile issue
+  *fixed issue : Can't get target server status on Nagios web page with ubuntu14/i386
+ -- Linux_SWdeliverables <Linux_SWdeliverables@external.groups.hp.com>  Mon, 19 Jan 2015 04:27:03 -0600
