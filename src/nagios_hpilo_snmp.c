@@ -1,6 +1,6 @@
 /* nagios_hpilo_snmp -- The base code for Linux to communicate with the SNMP
                         agent of the iLO via the SNMP APIs. 
-   (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
+   (C) Copyright [2013] Hewlett-Packard Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -444,20 +444,10 @@ print_oid_info (int status, struct ilo_oid_list **oid_list_ptr)
 
       priv_ptr = container_of(oid_list_ptr, struct ilo_snmp_priv, oid_list);
 
-		if (priv_ptr != NULL)  
-			if (priv_ptr->err_str)
-			{
-				if(strcmp(priv_ptr->err_str,"Timeout") == 0)
-				{
-					status = NAGIOS_UNKNOWN;
-					printf("%s - Probable Cause might be SNMP Community string is incorrect or not configured.\n", priv_ptr->err_str);
-				}
-				else
-				{	
-					printf("%s\n", priv_ptr->err_str);
-				}
-			}
-	}
+      if (priv_ptr != NULL)  
+	if (priv_ptr->err_str)
+	  printf("%s\n", priv_ptr->err_str);
+    }
 
   return status;
 }

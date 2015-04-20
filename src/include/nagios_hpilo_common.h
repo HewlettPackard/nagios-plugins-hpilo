@@ -1,5 +1,5 @@
 /* nagios_hpilo_common.h -- types and prototypes used by nagios iLO plug-in 
-   (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
+   (C) Copyright [2013] Hewlett-Packard Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 

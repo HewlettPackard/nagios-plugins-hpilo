@@ -1,5 +1,5 @@
 /* nagios_hpilo_engine -- retrieve an OID info from the SNMP agent of HP iLO
-   (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
+   (C) Copyright [2013] Hewlett-Packard Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -29,51 +29,44 @@
 /* Array of HP iLO OID table. */
 static struct ilo_oid_info ilo_old_table[] = 
 {
-	{{"System Health",	{1,3,6,1,4,1,232,11,2,10,7},	11,	
-		 "NULL",		{0},				0},	
-	parse_status_array,	ILO_SYS_OVERALL_COND},
-	{{"Fans",		{1,3,6,1,4,1,232,6,2,6,4},	11, 
-		 "Fan",		{1,3,6,1,4,1,232,6,2,6,7,1,9},	13},
-	parse_status,	ILO_HLTH_TYPE},
-	{{"Memory",		{1,3,6,1,4,1,232,6,2,14,4},	11, 
-		 "NULL",		{0},				0},
-	parse_status,	ILO_HLTH_TYPE},
-	{{"Network",		{1,3,6,1,4,1,232,11,2,10,7},	11, 
-		 "NULL",		{0},				0},
-	parse_status_array, ILO_NIC_MIB_COND},
-	{{"Power Supplies",	{1,3,6,1,4,1,232,6,2,9,1},	11, 
-		 "Power Supply",	{1,3,6,1,4,1,232,6,2,9,3,1,4},	13}, 
-	parse_status,ILO_HLTH_TYPE},
-	{{"Processors",	{1,3,6,1,4,1,232,1,2,2,4},	11, 
-		 "NULL",		{0},				0},
-	parse_status,	ILO_HLTH_TYPE},
-	{{"Storage",		{1,3,6,1,4,1,232,3,1,3},	10, 
-		 "NULL",		{0},				0},
-	parse_status,	ILO_HLTH_TYPE},
-	{{"Temperatures",	{1,3,6,1,4,1,232,6,2,6,3},	11, 
-		 "Sensor",		{1,3,6,1,4,1,232,6,2,6,8,1,6},	13},
-	parse_status,	ILO_HLTH_TYPE},
-	{{"Fan Redundancy",	{1,3,6,1,4,1,232,6,2,6,7,1,7},	13, 
-		 "NULL",		{0},				0},
-	parse_status,	ILO_REDUNDANT_TYPE},
-	{{"Power Redundancy",	{1,3,6,1,4,1,232,6,2,9,3,1,9},	13, 
-		 "NULL",		{0},				0},
-	parse_status,   ILO_REDUNDANT_TYPE},
-	{{"Host OS",	{1,3,6,1,4,1,232,11,2,2},	10, 
-		 "OS Name",{1,3,6,1,4,1,232,11,2,2,1},		11},
-	parse_status,   ILO_HLTH_STR_TYPE},
+  {{"System Health",	{1,3,6,1,4,1,232,11,2,10,7},	11,	
+    "NULL",		{0},				0},	
+    parse_status_array,	ILO_SYS_OVERALL_COND},
+  {{"Fans",		{1,3,6,1,4,1,232,6,2,6,4},	11, 
+    "Fan",		{1,3,6,1,4,1,232,6,2,6,7,1,9},	13},
+    parse_status,	ILO_HLTH_TYPE},
+  {{"Memory",		{1,3,6,1,4,1,232,6,2,14,4},	11, 
+    "NULL",		{0},				0},
+    parse_status,	ILO_HLTH_TYPE},
+  {{"Network",		{1,3,6,1,4,1,232,11,2,10,7},	11, 
+    "NULL",		{0},				0},
+    parse_status_array, ILO_NIC_MIB_COND},
+  {{"Power Supplies",	{1,3,6,1,4,1,232,6,2,9,1},	11, 
+    "Power Supply",	{1,3,6,1,4,1,232,6,2,9,3,1,4},	13}, 
+    parse_status,ILO_HLTH_TYPE},
+  {{"Processors",	{1,3,6,1,4,1,232,1,2,2,4},	11, 
+    "NULL",		{0},				0},
+    parse_status,	ILO_HLTH_TYPE},
+  {{"Storage",		{1,3,6,1,4,1,232,3,1,3},	10, 
+    "NULL",		{0},				0},
+    parse_status,	ILO_HLTH_TYPE},
+  {{"Temperatures",	{1,3,6,1,4,1,232,6,2,6,3},	11, 
+    "Sensor",		{1,3,6,1,4,1,232,6,2,6,8,1,6},	13},
+    parse_status,	ILO_HLTH_TYPE},
+  {{"Fan Redundancy",	{1,3,6,1,4,1,232,6,2,6,7,1,7},	13, 
+    "NULL",		{0},				0},
+    parse_status,	ILO_REDUNDANT_TYPE},
+  {{"Power Redundancy",	{1,3,6,1,4,1,232,6,2,9,3,1,9},	13, 
+    "NULL",		{0},				0},
+    parse_status,   ILO_REDUNDANT_TYPE},
 };
 
 /* The table for getting the status string.  */
 struct ilo_get_status_str_entry get_status_str_tbl[] = {
-	{ILO_HLTH_TYPE,	get_hlth_status_str}, 
-	{ILO_REDUNDANT_TYPE,	get_redundant_status_str},
-	{ILO_HLTH_STR_TYPE,	get_oid_str},
-	{0, NULL},
+  {ILO_HLTH_TYPE,	get_hlth_status_str}, 
+  {ILO_REDUNDANT_TYPE,	get_redundant_status_str},
+  {0, NULL},
 };
-
-
-static void copy_str (char **dest_str, int dest_len, char *src_str);
 
 /* Print the usage information */
 
@@ -200,43 +193,6 @@ process_options (int argc, char **argv, struct ilo_snmp_options *options,
 
   return ret;
 }
-static enum Nagios_status get_oid_str(struct ilo_oid_list **oid_list_ptr, void *data)
-{
-	enum Nagios_status    n_status = NAGIOS_WARNING;
-	struct ilo_oid_list *oid_list = *oid_list_ptr;
-	struct ilo_oid_info   *oid_info_ptr = (struct ilo_oid_info *) data;
-	char osName_str[128];
-
-	memset(osName_str,0,128);
-	while (oid_list != NULL)
-	{
-		if(snmp_oid_ncompare(oid_list->name,oid_list->name_len,
-					oid_info_ptr->oid_pool[HLTH_COMP_OID].oid,oid_info_ptr->oid_pool[HLTH_COMP_OID].oid_len,
-					oid_info_ptr->oid_pool[HLTH_COMP_OID].oid_len) == 0 )
-		{
-			strcpy(osName_str,oid_list->string);
-			n_status=NAGIOS_OK;
-		}
-		oid_list = oid_list->next;
-
-	}
-
-	oid_list = (*oid_list_ptr)->next;
-	free_oid_list(oid_list);
-	/* Only one element remaining */
-	(*oid_list_ptr)->next = NULL;
-	if(n_status != NAGIOS_OK)
-	{
-		sprintf(osName_str,"%s","Host is UNREACHABLE - Probable Cause might be AMS is not installed on the host OS.");
-	}
-
-	copy_str(&(*oid_list_ptr)->string, (*oid_list_ptr)->value_len,osName_str);
-	(*oid_list_ptr)->value_len = strlen((*oid_list_ptr)->string);
-	(*oid_list_ptr)->type = ASN_OCTET_STR;
-
-	return n_status;
-
-}
 
 /* Parse the status array returned by the SNMP agent of iLO.  */
 
@@ -278,13 +234,12 @@ parse_status (void **data_ptr, int *type_ptr)
       return NAGIOS_CRITICAL;
     }	
 
-	for (entry_ptr = get_status_str_tbl; entry_ptr->type; entry_ptr++) 
-	{
-		if (entry_ptr->type == *type_ptr && entry_ptr->get_status_str_fn_ptr)
-		{
-			n_status = entry_ptr->get_status_str_fn_ptr((struct ilo_oid_list **) data_ptr, oid_info_ptr);
-		}
-	}
+  for (entry_ptr = get_status_str_tbl; entry_ptr->type; entry_ptr++) 
+    {
+      if (entry_ptr->type == *type_ptr && entry_ptr->get_status_str_fn_ptr)
+	n_status = entry_ptr->get_status_str_fn_ptr(
+			(struct ilo_oid_list **) data_ptr, oid_info_ptr);
+    }
 
   return n_status;
 }
@@ -580,7 +535,7 @@ output_n_cleanup:
 	}
     }
 
-	status = print_oid_info(status, &snmp_priv.oid_list);
+  print_oid_info(status, &snmp_priv.oid_list);
 
   free_priv_data(&snmp_priv);
 
