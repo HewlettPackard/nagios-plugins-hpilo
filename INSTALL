@@ -1,51 +1,3 @@
-Quick Install
-*************
-   Three files (nagios_hpilo_engine, nagios_hpilo_cfg_generator, and
-nagios_hpilo_traps) will be copied to the default folder 
-(/usr/local/nagios/libexec) after executing the following commands.
-	$ ./configure && make && sudo make install
-
-   Please make sure the SNMP trap daemon (snmptrapd) is up and running 
-on your server. And, add the following lines to /etc/snmp/snmptrapd.conf for 
-receiving traps. Restart the snmpstrapd. 
-  -----------------------------------------------------------------------------
-  authCommunity log,execute,net public
-  # Cold Start Trap
-  traphandle 1.3.6.1.6.3.1.1.5.1  /usr/local/nagios/libexec/nagios_hpilo_cfg_generator -m 2
-
-  # iLO traps
-  traphandle 1.3.6.1.4.1.232.0.* /usr/local/nagios/libexec/nagios_hpilo_traps
-  -----------------------------------------------------------------------------
-
-   In order to make iLO respond the SNMP requests, you should add "public" to 
-"Read Community" and "Trap Community" fields under
-Administration->Management->SNMP setting in iLO web page.
-
-Value-added feature: 
-1) Display the iLO health status in real-time
-   In order for the monitoring server (Nagios server) to get the health 
-status of the HP ProLiant servers in real-time, the SNMP Alert Destination(s) 
-field under Administration->Management->SNMP setting in iLO web page has to
-been configured with the IP address of the monitoring server. 
-
-2) Categorize the preferred servers into the same host group
-   The plug-in supports host group configuration for specific host IP address.
-The administrator can define a list of the host group configuration in a file.
-For example:
-   ----------------------------------------
-   # Group Name	# IP address or Sub-network
-   Data Center A,  16.153.112.0/24
-   Data Center B,  16.153.113.0/24
-   ----------------------------------------
-
-   And, add/change the following line to /etc/snmp/snmptrapd.conf. Restart the
-snmptrapd.
- 
-   ---------------------------------------------------------------------------
-   traphandle 1.3.6.1.6.3.1.1.5.1  /usr/local/nagios/libexec/nagios_hpilo_cfg_generator -s your_host_group_cfg_file
-   ---------------------------------------------------------------------------
- 
-
 Installation Instructions
 *************************
 
@@ -57,8 +9,36 @@ are permitted in any medium without royalty provided the copyright
 notice and this notice are preserved.  This file is offered as-is,
 without warranty of any kind.
 
+Quick Installation
+******************
+
+   After executing the following commands:
+	$ ./configure && make && sudo make install
+   Four files (nagios_hpilo_engine, nagios_hpilo_cfg_generator, nagios_hpilo_traps
+and hpiLO_nagios_config) will be copied to the default folder 
+/usr/local/nagios/libexec	 on Rhel/Sles 
+/usr/lib/nagios/plugins		 on Ubuntu
+
+HP iLO Management configuration
+===============================
+   In order to make iLO respond the SNMP requests, you should add "public" to 
+"Read Community" and "Trap Community" fields under
+Administration->Management->SNMP setting in iLO web page.
+   In order for the monitoring server (Nagios server) to get the health 
+status of the HP ProLiant servers in real-time, the SNMP Alert Destination(s) 
+field under Administration->Management->SNMP setting in iLO web page has to
+been configured with the IP address of the monitoring server. 
+
+Firewall
+========
+Open httpd and SNMP port on the firewall with root account.
+# iptables -I INPUT -p udp -m udp --dport 161 -j ACCEPT
+# iptables -I INPUT -p udp -m udp --dport 162 -j ACCEPT
+# iptables -I INPUT -p tcp -m tcp --dport 80 -j ACCEPT
+# iptables-save > /etc/sysconfig/iptables
+
 Basic Installation
-==================
+******************
 
    Briefly, the shell commands `./configure; make; make install' should
 configure, build, and install this package.  The following

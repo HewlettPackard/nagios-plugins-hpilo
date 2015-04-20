@@ -6,20 +6,29 @@ the administator does not need to configure the nagios configuration file
 (/nagios_etc_path/conf.d) manually. The plug-in automatically writes the 
 server configuration to the nagios configuration file 
 (/nagios_etc_path/cfg_dir/ilo.cfg, for example: /etc/nagios3/conf.d/ilo.cfg 
-under Ubuntu 13.04) once any of HP ProLiant servers is discovered 
+under Ubuntu 14.04) once any of HP ProLiant servers is discovered 
 within the data center.
 
 Requirements:
 -------------
-- Net-snmp
-- snmptrapd
+The following are the dependencies for Nagios plug-in installation.
+- nagios (version >= 3.5 )
+- nagios-plugins
+- procmail
 - curl
 - nmap (version >= 5.51)
+- net-snmp
+- net-snmp-utils
+- net-snmp-devel
+- libsnmp (ubuntu)
+- libsnmp-dev (ubuntu)
+- snmpd
 - HP ProLiant Server 
 
 Features:
--------------
-1) Discover and monitor HP ProLiant servers within data center automatically. There are two alternatives to discover HP ProLiant servers.
+---------
+1) Discover and monitor HP ProLiant servers within data center automatically.
+There are two alternatives to discover HP ProLiant servers.
 
 	1.1) Active discovery: The active discovery scans all available servers 
 			       in the network of the monitoring server. This 
@@ -44,5 +53,49 @@ Features:
 4) Categorize the preferred servers into the same host group.
 
 Installation:
-------------
-Read INSTALL file
+-------------
+Read INSTALL file.
+
+Configuration:
+--------------
+Go to the default folder
+/usr/local/nagios/libexec        on Rhel/Sles
+/usr/lib/nagios/plugins          on Ubuntu
+
+The hpiLO_nagios_config auto configuration script will generate configuration 
+file and Scan network IP range or Subnet using configured nagios hostgroup.
+
+# ./hpiLO_nagios_config 
+
+
+Manual configuration:
+---------------------
+Create the configuration file and Categorize the preferred servers into the same host group with SNMP Read Community string
+and SNMP Trap Community string.
+The plug-in supports host group configuration for specific host IP address.
+The administrator can define a list of the host group configuration in a file.
+For example:
+   /usr/local/nagios/libexec#vi servers.cfg
+   ----------------------------------------
+   # Group Name # IP address/Sub-network #SNMP read community string #SNMP trap community string
+    PASSIVE_DISCOVERY 1
+    ACTIVE_DISCOVERY  1
+    HOSTGROUP: Data Center A,192.168.1.1-192.168.1.255,public,public
+    HOSTGROUP: Data Center B,192.168.2.1/24,public,public
+    CHECK_INTERVAL 5
+   ----------------------------------------
+
+Run the configuration file to complete the discovery of servers.
+# ./nagios_hpilo_cfg_generator -m 3 -s servers.cfg
+
+Uninstallation and Backup:
+--------------------------
+Read INSTALL file.
+Users need to take back up of ilo.cfg file for later usage before uninstallation.
+The file could be in /usr/local/nagios/etc/ilo or /etc/nagios3/ilo 
+depends on how users install nagios.
+
+FAQ:
+----
+Q: Always scan total hosts '0' of a lots of hosts.
+A: Check if curl and nmap are correctly installed.

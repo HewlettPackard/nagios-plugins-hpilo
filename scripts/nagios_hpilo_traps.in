@@ -4,7 +4,7 @@
 #			 received from HP ProLiant Server and to 
 #			 update the corresponding status in real-time
 #	        
-#  (C) Copyright [2013] Hewlett-Packard Development Company, L.P.
+#  (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
 #
 #  This program is free software; you can redistribute it and/or modify 
 #  it under the terms of version 2 of the GNU General Public License as 
@@ -24,9 +24,9 @@
 #
 #   Written by Adrian Huang <adrian.huang@hp.com>.
 
-prefix=@prefix@
+prefix=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
-NagiosLibexec="${prefix}/libexec"
+NagiosLibexec="${prefix}"
 NagiosHpiloEngine="nagios_hpilo_engine"
 
 HpiloLogFile="/var/log/nagios_hpilo_traps.log"
@@ -115,6 +115,13 @@ function get_nagios_cfg_file() {
 
 }
 
+function get_nagios_ilo_cfg_path() {
+	local   nagios_cfg=$(get_nagios_cfg_file)
+	local nagios_path=`dirname $nagios_cfg`
+	local NagiosIloCfgFile="$nagios_path/ilo/ilo.cfg"
+	echo $NagiosIloCfgFile
+}
+
 # argument 1 ($1): the iLO IP which generated the trap this time 
 # argument 2 ($2): the iLO IP trap number 
 # argument 3 ($3): service type
@@ -148,6 +155,16 @@ function update_hlth_status () {
 		
 
 }
+# $1: file name
+# $2: search pattern
+function search_string() {
+local   str=
+
+if [ -f $1 ]; then
+	str=`grep "$2" -A 1 $1`
+fi
+echo $str
+}
 
 read IloIP 
 read protocol
@@ -174,6 +191,17 @@ ServiceType=$(get_hlth_service_type $IloTrapNumber)
 
 write_log "ilo_ip: $IloIP trap_number: $IloTrapNumber, type: $ServiceType"
 
+
+NagiosIloCfgFile=$(get_nagios_ilo_cfg_path)
+has_configured=$(search_string $NagiosIloCfgFile $IloIP)
+if [ "x${has_configured}" != "x" ]; then
+	comm_str_id=`echo $has_configured | awk '{print $3}'`
+	if [ "x${comm_str_id}" != "x" ]; then
+		HpiloSnmpComm=`echo $has_configured | awk '{print $4}'`
+	fi
+fi
+
+
 if [ "$ServiceType" != "None" ]
 then
 
@@ -185,4 +213,3 @@ then
 	# update system health status
 	update_hlth_status $IloIP $IloTrapNumber "${HpiloServices[0]}"
 fi
-

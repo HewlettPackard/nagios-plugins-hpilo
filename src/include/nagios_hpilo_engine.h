@@ -1,5 +1,5 @@
 /* nagios_hpilo_engine.h -- types and prototypes used by nagios iLO engine 
-   (C) Copyright [2013] Hewlett-Packard Development Company, L.P.
+   (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -34,7 +34,7 @@
 #define NAGIOS_ILO_REQUIRE_ARGC	3
 
 #define IDX_OUT_OF_RANGE(idx, array) \
-	((idx <= 0 || idx > NUM_ELEMENTS(array)) ? TRUE : FALSE)
+	((idx < 0 || idx > NUM_ELEMENTS(array)) ? TRUE : FALSE)
 
 #define ILO_OID_NAME_LEN	24 
 
@@ -95,7 +95,9 @@ enum
   /* The array index of the system overall condition.  */
   ILO_SYS_OVERALL_COND, 
 
-  ILO_HLTH_TYPE,	
+  ILO_HLTH_TYPE,
+
+  ILO_HLTH_STR_TYPE,
 
   ILO_REDUNDANT_TYPE,
 
@@ -152,7 +154,7 @@ struct ilo_oid_info
 static enum Nagios_status parse_status(void **, int *);
 static enum Nagios_status parse_status_array(void **, int *);
 static enum Nagios_status get_hlth_status_str(struct ilo_oid_list **, void *);
-static enum Nagios_status get_redundant_status_str(struct ilo_oid_list **, 
-									void *);
+static enum Nagios_status get_redundant_status_str(struct ilo_oid_list **,void *);
+static enum Nagios_status get_oid_str(struct ilo_oid_list **,void *);
 
 #endif

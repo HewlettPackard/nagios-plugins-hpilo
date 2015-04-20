@@ -52,7 +52,8 @@ POST_UNINSTALL = :
 subdir = scripts
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in \
 	$(srcdir)/nagios_hpilo_cfg_generator.in \
-	$(srcdir)/nagios_hpilo_traps.in
+	$(srcdir)/nagios_hpilo_traps.in \
+	$(srcdir)/hpiLO_nagios_config.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/m4-ax_compare_version.m4 \
 	$(top_srcdir)/configure.ac
@@ -60,7 +61,7 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
-CONFIG_CLEAN_FILES = nagios_hpilo_cfg_generator nagios_hpilo_traps
+CONFIG_CLEAN_FILES = nagios_hpilo_cfg_generator nagios_hpilo_traps hpiLO_nagios_config
 CONFIG_CLEAN_VPATH_FILES =
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
@@ -187,7 +188,7 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-libexec_SCRIPTS = nagios_hpilo_cfg_generator nagios_hpilo_traps
+libexec_SCRIPTS = nagios_hpilo_cfg_generator nagios_hpilo_traps hpiLO_nagios_config
 all: all-am
 
 .SUFFIXES:
@@ -224,6 +225,8 @@ $(am__aclocal_m4_deps):
 nagios_hpilo_cfg_generator: $(top_builddir)/config.status $(srcdir)/nagios_hpilo_cfg_generator.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 nagios_hpilo_traps: $(top_builddir)/config.status $(srcdir)/nagios_hpilo_traps.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+hpiLO_nagios_config: $(top_builddir)/config.status $(srcdir)/hpiLO_nagios_config.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 install-libexecSCRIPTS: $(libexec_SCRIPTS)
 	@$(NORMAL_INSTALL)

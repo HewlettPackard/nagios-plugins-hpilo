@@ -49,6 +49,7 @@ AC_CONFIG_FILES([
 	scripts/Makefile
 	scripts/nagios_hpilo_cfg_generator
 	scripts/nagios_hpilo_traps
+	scripts/hpiLO_nagios_config
 ])
 
 AC_OUTPUT
