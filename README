@@ -2,9 +2,9 @@ Nagios plug-in for iLO Agentless Management
 ------------------------------------------
 Nagios plug-in for iLO Agentless Management aims to automatically manage HP 
 ProLiant servers within the data center. With the help of the plug-in, 
-the administator does not need to configure the nagios configuration file 
+the administator does not need to configure the Nagios configuration file 
 (/nagios_etc_path/conf.d) manually. The plug-in automatically writes the 
-server configuration to the nagios configuration file 
+server configuration to the Nagios configuration file 
 (/nagios_etc_path/cfg_dir/ilo.cfg, for example: /etc/nagios3/conf.d/ilo.cfg 
 under Ubuntu 14.04) once any of HP ProLiant servers is discovered 
 within the data center.
@@ -12,8 +12,8 @@ within the data center.
 Requirements:
 -------------
 The following are the dependencies for Nagios plug-in installation.
-- nagios (version >= 3.5 )
-- nagios-plugins
+- Nagios (version >= 3.5 )
+- Nagios-plugins
 - procmail
 - curl
 - nmap (version >= 5.51)
@@ -63,7 +63,7 @@ Go to the default folder
 /usr/lib/nagios/plugins          on Ubuntu
 
 The hpiLO_nagios_config auto configuration script will generate configuration 
-file and Scan network IP range or Subnet using configured nagios hostgroup.
+file and Scan network IP range or Subnet using configured Nagios hostgroup.
 
 # ./hpiLO_nagios_config 
 
@@ -93,7 +93,7 @@ Uninstallation and Backup:
 Read INSTALL file.
 Users need to take back up of ilo.cfg file for later usage before uninstallation.
 The file could be in /usr/local/nagios/etc/ilo or /etc/nagios3/ilo 
-depends on how users install nagios.
+depends on how users install Nagios.
 
 FAQ:
 ----
