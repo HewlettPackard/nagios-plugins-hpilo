@@ -488,6 +488,7 @@ function get_nagios_cfg_file() {
                 local nagios_suffix=`echo $nagios_cfg | cut -d '/' -f 2-`
 
                 nagios_cfg="${nagios_prefix}/$nagios_suffix"
+		nagios_cfg=`echo $nagios_cfg | sed -r  's/\/\//\//g'`
         fi
 
         echo "$nagios_cfg"

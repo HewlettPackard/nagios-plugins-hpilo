@@ -47,7 +47,7 @@ ConfigDisc=3
 
 DiscModes=($ActiveDisc $PassiveDisc $ConfigDisc)
 
-LockFile="/tmp/naigos_hpilo.lock"
+LockFile="/tmp/nagios_hpilo.lock"
 TmpFile="/tmp/tmp.txt"
 
 # SNMP variables
@@ -1136,7 +1136,9 @@ if [[ $nagios_cfg = *prefix* ]]; then
 	local nagios_suffix=`echo $nagios_cfg | cut -d '/' -f 2-`
 
 	nagios_cfg="${nagios_prefix}/$nagios_suffix"
+	nagios_cfg=`echo $nagios_cfg | sed -r  's/\/\//\//g'`
 	write_log "nagios_cfg : ${nagios_prefix}/$nagios_suffix"
+	
 fi
 
 local nagios_path=`dirname $nagios_cfg`
@@ -1149,8 +1151,12 @@ if [[ "x${nagios_cfg_dir}" = "x" ]] || [[ "${nagios_path}/ilo" != "${nagios_cfg_
 	# create a folder if the folder does not exist. 
 	[ -d $nagios_path/ilo ] || mkdir $nagios_path/ilo
 
-	local line_number=`grep -n "^#cfg_dir=$nagios_path" \
+	local line_number=`grep -n "^#cfg_dir=" \
 	$nagios_cfg  | tail -n 1 | cut -d ':' -f 1`
+	#If line number is empty, append the cfg_dir ilo path to EOF.
+	if [ "x${line_number}" = "x" ]; then
+		line_number=`wc -l $nagios_cfg | cut -d ' ' -f1`
+	fi
 
 	# append a cfg_dir statement
 	sed -e "$line_number a cfg_dir=$nagios_path/ilo" $nagios_cfg \
@@ -1296,6 +1302,9 @@ ActiveDiscMode()
 
 
 }
+
+#remove lock file if exist 
+rm -f $LockFile
 
 # Check the discovery mode
 check_mode $mode
