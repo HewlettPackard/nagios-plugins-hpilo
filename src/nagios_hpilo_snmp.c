@@ -1,6 +1,6 @@
 /* nagios_hpilo_snmp -- The base code for Linux to communicate with the SNMP
                         agent of the iLO via the SNMP APIs. 
-   (C) Copyright [2015] Hewlett-Packard Enterprise Development Company, L.P.
+   (C) Copyright [2015] Hewlett Packard Enterprise Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 

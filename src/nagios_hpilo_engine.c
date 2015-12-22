@@ -1,5 +1,5 @@
 /* nagios_hpilo_engine -- retrieve an OID info from the SNMP agent of HP iLO
-   (C) Copyright [2015] Hewlett-Packard Enterprise Development Company, L.P.
+   (C) Copyright [2015] Hewlett Packard Enterprise Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -23,7 +23,7 @@
 #include "nagios_hpilo_engine.h"
 
 /* The official name of this program (e.g., no 'g' prefix).  */
-#define PROGRAM_NAME	"nagios_hpilo_engine"
+#define PROGRAM_NAME	"nagios_hpeilo_engine"
 #define PROGRAM_VERSION VERSION
 
 struct inst_list *list = NULL;
