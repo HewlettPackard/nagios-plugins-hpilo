@@ -1,0 +1,31 @@
+table {
+    width:60%;
+}
+//table, th, td {
+    border: 1px solid black;
+    border-collapse: collapse;
+}
+th, td {
+    padding: 5px;
+    text-align: left;
+	//font-family:'Courier New';
+	//font-size:16px;
+}
+table#t01 tr:nth-child(even) {
+    background-color: #eee;
+}
+table#t01 tr:nth-child(odd) {
+   background-color:#fff;
+}
+table#t01 th	{
+    background-color: #B8B8B8 ;
+    color: black;
+}
+caption {
+    background-color: skyblue;
+    color:  black;
+    font-weight: bold;
+	padding: 5px;
+	font-family:'Arial';
+	font-size:20px;
+}
