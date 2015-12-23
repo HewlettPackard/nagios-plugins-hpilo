@@ -1,2 +1,1 @@
-libexec_SCRIPTS = nagios_hpilo_cfg_generator nagios_hpilo_traps
- hpiLO_nagios_config
+libexec_SCRIPTS = nagios_hpilo_cfg_generator nagios_hpilo_traps hpiLO_nagios_config

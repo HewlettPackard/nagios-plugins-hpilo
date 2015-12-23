@@ -6,9 +6,6 @@
 
 1.2.0 Support for RHEL6 and SLES11. Fixed some issues due to the older nagios under RHEL6 and SLES11.
 
-1.2.1 Fix the redundant/non-redundant issue
-
-1.3.0 Speed up the active discovery. Imporved 90%+ discovery time! The old-fansioned approach needs about 1483 seconds to discover 512 hosts. The new approach only needs 115 seconds. 
-
 1.4.0 Removed auto configuration of passive discovery on installation and added configuration script for easy configuration after installation.
 
+1.5.0 Support Nagios 4.x and notification Email. Enhance "Unknown" status in nagios webpage and Enhance Service Group Funtion & Service Detail in nagios configure file. Adddiscovery review in configure process

@@ -1,5 +1,5 @@
 /* nagios_hpilo_engine -- retrieve an OID info from the SNMP agent of HP iLO
-   (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
+   (C) Copyright [2015] Hewlett-Packard Enterprise Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -26,9 +26,14 @@
 #define PROGRAM_NAME	"nagios_hpilo_engine"
 #define PROGRAM_VERSION VERSION
 
+struct inst_list *list = NULL;
+
 /* Array of HP iLO OID table. */
-static struct ilo_oid_info ilo_old_table[] = 
+static struct ilo_oid_info ilo_oid_table[] = 
 {
+	{{"System Health Array",	{1,3,6,1,4,1,232,11,2,10,7},	11,	
+		 "NULL",		{0},				0},	
+	health_status_array,	ILO_SYS_OVERALL_COND},
 	{{"System Health",	{1,3,6,1,4,1,232,11,2,10,7},	11,	
 		 "NULL",		{0},				0},	
 	parse_status_array,	ILO_SYS_OVERALL_COND},
@@ -63,6 +68,32 @@ static struct ilo_oid_info ilo_old_table[] =
 		 "OS Name",{1,3,6,1,4,1,232,11,2,2,1},		11},
 	parse_status,   ILO_HLTH_STR_TYPE},
 };
+/* Array of HP iLO OID table. */
+static struct ilo_oid_info ilo_oid_info_table[] = 
+{
+	{{"Power Supply Table",	{1,3,6,1,4,1,232,6,2,9,3},	11, 
+		"NULL",		{0},		0},
+		"NULL",		0},
+	{{"Fan Table",		{1,3,6,1,4,1,232,6,2,6,7},	11, 
+		"NULL",		{0},		0},
+		"NULL",		0},
+	{{"Temperature Table",	{1,3,6,1,4,1,232,6,2,6,8},	11, 
+		"NULL",		{0},		0},
+		"NULL",		0},
+	{{"Storage Table",	{1,3,6,1,4,1,232,3,2,2,1},	11, 
+		"NULL",		{0},		0},
+		"NULL",		0},
+	{{"Memory Table",       {1,3,6,1,4,1,232,6,2,14,12},    11,
+                "NULL",         {0},            0},
+                "NULL",         0},
+	{{"Processor Table",    {1,3,6,1,4,1,232,1,2,2,1},      11,
+                "NULL",         {0},            0},
+                "NULL",         0},
+	{{"Network Table",    	{1,3,6,1,4,1,232,18,2,3},      	10,
+                "NULL",         {0},            0},
+                "NULL",         0},
+};
+//static struct ilo_oid_info *ilo_oid_table = &ilo_old_info_table;
 
 /* The table for getting the status string.  */
 struct ilo_get_status_str_entry get_status_str_tbl[] = {
@@ -123,9 +154,9 @@ print_help (void)
 	  printf("\n\toid index\tOID info\n");
 	  printf("\t------------------------------------\n");
 
-	  for (j = 0; j < NUM_ELEMENTS(ilo_old_table); j++) 
-	    printf("\t%4d\t\t%s\n", j + 1, 
-		ilo_old_table[j].oid_pool[HLTH_GROUP_OID].oid_name);
+	  for (j = 0; j < NUM_ELEMENTS(ilo_oid_table); j++) 
+	    printf("\t%4d\t\t%s\n", j, 
+		ilo_oid_table[j].oid_pool[HLTH_GROUP_OID].oid_name);
 
 	  printf("\t------------------------------------\n");
 	}
@@ -154,7 +185,7 @@ check_option_instruction (int instruction)
 
 int 
 process_options (int argc, char **argv, struct ilo_snmp_options *options,
-		 int *option_inst)
+		 int *option_inst,int *json_flag)
 {
   char option;
   int ret = NAGIOS_ILO_SUCCESS_STATUS;
@@ -181,6 +212,9 @@ process_options (int argc, char **argv, struct ilo_snmp_options *options,
 	  options->oid_idx = atoi(optarg);
 	  num_argc_proceed++;
 	  break;
+	case 'J':
+	  *json_flag  = 1;	
+           break;
 	case 'V':
 	  *option_inst = NAGIOS_OPTION_PRINT_VERSION;	
 	  break;
@@ -237,6 +271,62 @@ static enum Nagios_status get_oid_str(struct ilo_oid_list **oid_list_ptr, void *
 	return n_status;
 
 }
+/* Parse the health_status_array returned by the SNMP agent of iLO.  */
+enum Nagios_status health_status_array (void **data_ptr, int *type_ptr)
+{
+  	struct ilo_snmp_priv *priv_ptr = NULL;
+	struct ilo_oid_list *oid_list = (struct ilo_oid_list *) *data_ptr;
+  	struct ilo_oid_info  *oid_info_ptr = container_of((int *) type_ptr, 
+						struct ilo_oid_info, type);
+
+	char *status_str[] = {"NA", "Other", "OK", "Degraded", "Failed"};
+
+	char status_array[256];
+
+	int statusArrayIndex = 0;
+
+	enum Nagios_status systemStatus = NAGIOS_OK;
+
+	memset(status_array,0,sizeof(status_array));
+
+	for (statusArrayIndex = 0; statusArrayIndex < 15; statusArrayIndex++)
+ 	{
+ 		oid_list->integer = oid_list->string[statusArrayIndex];
+
+		if (!statusArrayIndex)
+		{
+  			switch (oid_list->integer)
+    			{
+    				case ILO_HLTH_STATUS_NA:
+				case ILO_HLTH_STATUS_OTHER:
+					systemStatus = NAGIOS_UNKNOWN;
+      				break;
+    				case ILO_HLTH_STATUS_DEGRADED:
+      					systemStatus = NAGIOS_WARNING;
+      				break;
+    				case ILO_HLTH_STATUS_FAILED:
+      					systemStatus = NAGIOS_CRITICAL;
+      				break;
+    				case ILO_HLTH_STATUS_OK:
+      					systemStatus = NAGIOS_OK;
+      				break;
+				default:
+					systemStatus = NAGIOS_UNKNOWN;
+					break;
+    			}
+			sprintf(status_array,"%s",status_str[oid_list->integer]);
+		}
+		else
+ 		{
+			sprintf(status_array,"%s;%s",status_array,status_str[oid_list->integer]);
+ 		}
+  	}
+	copy_str(&(oid_list->string),oid_list->value_len,status_array);
+
+	oid_list->value_len = strlen(oid_list->string);
+  	oid_list->type = ASN_OCTET_STR;
+  	return systemStatus;
+}
 
 /* Parse the status array returned by the SNMP agent of iLO.  */
 
@@ -273,7 +363,7 @@ parse_status (void **data_ptr, int *type_ptr)
 	  priv_ptr = container_of((struct ilo_oid_list **) data_ptr, 
 				   struct ilo_snmp_priv, 
 				   oid_list);
-	  ILO_ERR_DEBUG(&priv_ptr->err_str, "[%s] POidList is NULL", __func__);
+	  ILO_ERR_DEBUG(&priv_ptr->err_str, "[%s] OidList is NULL", __func__);
 	}
       return NAGIOS_CRITICAL;
     }	
@@ -330,7 +420,8 @@ get_failed_component_status(struct ilo_oid_list **oid_list_ptr,
   struct ilo_oid_list	*oid_list = *oid_list_ptr; 
 
   struct generic_oid_info *generic_oid_info_ptr;
-  char	buf[128];
+  char	buf[1024];
+  char  *toolong="string is too long.";
   int	slot_num = 1;
 		
   priv_ptr = container_of((struct ilo_oid_list **) oid_list_ptr, 
@@ -348,8 +439,13 @@ get_failed_component_status(struct ilo_oid_list **oid_list_ptr,
   while ((oid_list = oid_list->next)) 
     {
       if (oid_list->integer != ILO_HLTH_STATUS_OK) {
-	sprintf(buf, "%s [%s %d - %s]", buf, generic_oid_info_ptr->oid_name, 
+	if(1024>(strlen(buf)+strlen(toolong)+1)){
+		sprintf(buf, "%s [%s %d - %s]", buf, generic_oid_info_ptr->oid_name, 
 		slot_num, str_addr[oid_list->integer]); 
+	}else{
+		sprintf(buf, "%s ", toolong); 
+		
+	}
       }
 
       slot_num++;
@@ -509,15 +605,18 @@ main (int argc, char **argv)
   struct ilo_snmp_priv	snmp_priv;
   struct ilo_oid_info	*oid_info_ptr = NULL;
 
-  int	func_ret;
+  int	func_ret,next=0;
   int	oid_idx;
   int	option_instruction = NAGIOS_OPTION_NOP;
+  int   jflag = 0;
+
+  struct inst *instance, *tmp = NULL;
 
   enum Nagios_status status = NAGIOS_OK;
 
   init_priv_data(&snmp_priv);
 
-  if (process_options(argc, argv, &snmp_priv.options, &option_instruction) 
+  if (process_options(argc, argv, &snmp_priv.options, &option_instruction, &jflag) 
 		      != NAGIOS_ILO_SUCCESS_STATUS) 
     {
       usage();
@@ -529,20 +628,25 @@ main (int argc, char **argv)
 
   oid_idx = snmp_priv.options.oid_idx;
 
-  /* Check if the OID index is out of range in the iLO OID table.  */
-  if (IDX_OUT_OF_RANGE(oid_idx, ilo_old_table) == TRUE) 
-    {
-      asprintf(&snmp_priv.err_str, "OID index '%d' is out-of-range "
+/* Verify the json flag status */
+   if (!jflag)
+   {
+	/* Check if the OID index is out of range in the iLO OID table.  */
+	if (IDX_OUT_OF_RANGE(oid_idx, ilo_oid_table) == TRUE) 
+  	{
+    		asprintf(&snmp_priv.err_str, "OID index '%d' is out-of-range "
 				   "in iLO OID table. The OID index "
-				   "should be 1-%d", 
-				   oid_idx, NUM_ELEMENTS(ilo_old_table));
+				   "should be 0-%d", 
+				   oid_idx, NUM_ELEMENTS(ilo_oid_table)-1);
 
-      status = NAGIOS_CRITICAL;
-      goto output_n_cleanup;
-
-    }
-
-  oid_info_ptr = &ilo_old_table[oid_idx-1];
+    		status = NAGIOS_ILO_FAIL_STATUS;
+    		goto output_n_cleanup;
+  	}
+    	oid_info_ptr = &ilo_oid_table[oid_idx];
+   }
+   else {
+        oid_info_ptr = &ilo_oid_info_table[oid_idx-1];
+   }
 
   /* Establish a SNMP session with the SNMP agent of iLO.  */
   if((init_ilo_snmp_session(&snmp_priv)) != NAGIOS_ILO_SUCCESS_STATUS) 
@@ -560,15 +664,54 @@ main (int argc, char **argv)
 			      oid_info_ptr->oid_pool[HLTH_GROUP_OID].oid_len,
 			      &snmp_priv.err_str);
 
-  if (func_ret != NAGIOS_ILO_SUCCESS_STATUS) 
+   if(jflag)
+   {
+      list = (struct inst_list *) malloc(sizeof (struct inst_list *));
+      if (list != NULL)
+      {
+		list->inst_count = 0;
+		list->obj = NULL;
+      }
+      /* Retrive the OID information from oid_list and store 
+         in list of struct inst_list. */
+      service_details_print_oid_info(&snmp_priv.oid_list, &oid_idx);
+
+      /* Get the OID information in json format */
+      if (list->obj != NULL)
+      {
+		printf("var jData = \'{");
+		instance = list->obj;
+		while(instance != NULL)
+		{
+			if(next) {
+        			printf(", %s",instance->json_doc);
+			}
+			else {
+				printf(" %s ",instance->json_doc);
+			}
+        		tmp = instance;
+        		instance = instance->next;
+        		free(tmp->json_doc);
+        		free(tmp);
+			next = 1;
+   		}
+   		printf ("\}\';\n\nvar serviceID = %d;\n", oid_idx);
+   		free(list);
+      }else {
+   		printf ("\n\nvar serviceID = %d;\n", oid_idx);
+		printf ("\nvar jData = \"\";\n");
+      }
+   }
+	
+   if (func_ret != NAGIOS_ILO_SUCCESS_STATUS) 
     {
-      status = NAGIOS_CRITICAL;
+      status = NAGIOS_ILO_FAIL_STATUS;
       goto output_n_cleanup;
     }
 
 output_n_cleanup:
 
-  if (status == NAGIOS_OK) 
+  if (status == NAGIOS_OK && !jflag) 
     {
       /* The additional status parsing process is required if the function
          pointer and the retrieved OID list are valid.  */
@@ -579,8 +722,8 @@ output_n_cleanup:
 					       &oid_info_ptr->type);
 	}
     }
-
-	status = print_oid_info(status, &snmp_priv.oid_list);
+  if(!jflag)
+    status = print_oid_info(status, &snmp_priv.oid_list);
 
   free_priv_data(&snmp_priv);
 

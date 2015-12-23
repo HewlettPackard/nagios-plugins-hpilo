@@ -1,5 +1,5 @@
 /* nagios_hpilo_common.h -- types and prototypes used by nagios iLO plug-in 
-   (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
+   (C) Copyright [2015] Hewlett-Packard Enterprise Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -67,6 +67,20 @@ enum Nagios_status
 		asprintf(ppError, "%s[Error]: " fmt, buf, ##args); \
 	}
 
+/* Data structure to store services detailed  OID inforamtion retrieved from a specific OID. */
+/* Data structure to create object for each instance */
+struct inst {
+	char *json_doc;		/* 1024 bytes allocation */
+	int  bytes_cons;	/*track the pos in json_doc after updating each element */
+	struct inst *next;
+ };
+
+/* Data structure to create instances */
+struct inst_list {
+	int inst_count; /*number of instances*/
+	struct inst *obj; /*Instance List*/
+}*glist;
+
 /* Data structure to store OID information retrieved from a specific OID.  */
 struct ilo_oid_list 
 {
@@ -133,7 +147,9 @@ struct ilo_snmp_priv
   char *err_str;	
 
   /* Pointer to an OID list.  */
-  struct ilo_oid_list	*oid_list;		
+  struct ilo_oid_list	*oid_list, *oid_list_info;		
+
+  
 };
 
 #endif

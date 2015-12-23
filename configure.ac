@@ -2,10 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT(nagios-plugins-hpilo, 1.3.0, adrian.huang@hp.com)
+AC_INIT(nagios-plugins-hpilo, 1.5.0, Linux_SWdeliverables@groups.ext.hpe.com)
 AC_CONFIG_SRCDIR([src/nagios_hpilo_engine.c])
 AC_CONFIG_HEADERS([config.h])
-AM_INIT_AUTOMAKE(nagios-plugins-hpilo, 1.3.0)
+AM_INIT_AUTOMAKE(nagios-plugins-hpilo, 1.5.0)
 AC_CONFIG_MACRO_DIR([m4])
 
 m4_include([m4/m4-ax_compare_version.m4])
@@ -42,10 +42,12 @@ AC_TYPE_SIZE_T
 
 # Checks for library functions.
 AC_FUNC_MALLOC
-AC_CHECK_FUNCS([memset strdup])
+AC_CHECK_FUNCS([memset strdup strstr])
 AC_CONFIG_FILES([
 	Makefile 
 	src/Makefile 
+	action-url/Makefile 
+	conf.d/Makefile 
 	scripts/Makefile
 	scripts/nagios_hpilo_cfg_generator
 	scripts/nagios_hpilo_traps

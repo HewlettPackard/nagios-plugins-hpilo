@@ -1,6 +1,6 @@
 /* nagios_hpilo_snmp -- The base code for Linux to communicate with the SNMP
                         agent of the iLO via the SNMP APIs. 
-   (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
+   (C) Copyright [2015] Hewlett-Packard Enterprise Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -21,7 +21,7 @@
 /* Written by Adrian Huang <adrian.huang@hp.com>.  */
 
 #include "nagios_hpilo_snmp.h"
-
+extern struct inst_list *list;
 /* Return TRUE if the 'str' contains the hexadecimal character.  */
 
 static int 
@@ -55,6 +55,20 @@ print_hex_str (char *str, int value_len)
   printf("\n");
 }
 
+/* Copy the string in the hexadecimal format.  */
+
+static void 
+copy_hex_str (char *str, int value_len, char *hex_buf, int len)
+{
+  int i, hex_len = len/3;
+
+  for (i = 0; i < value_len && i < hex_len; i++)
+   {
+    sprintf(hex_buf,"%02X ", (unsigned char) str[i]);
+    hex_buf = hex_buf + 3;
+   }
+}
+
 /* Retrieve the variable list from the netsnmp component. Next, the retrieved 
    list will be placed in ilo_oid_list in order to process each valid OID.  */
 
@@ -83,6 +97,14 @@ get_netsnmp_var (struct ilo_oid_list *dest, netsnmp_variable_list *src)
       dest->string[dest->value_len] = '\0';
 
       break;
+    case ASN_COUNTER:
+	dest->integer = (int) &src->val.counter64;
+	
+      break;
+    case ASN_GAUGE:
+	dest->integer = (int) &src->val.counter64;
+
+      break;
     case ASN_IPADDRESS:
       asprintf(&dest->string, "%d.%d.%d.%d", src->val.string[0],
 					     src->val.string[1],
@@ -104,8 +126,9 @@ oid_copy (oid *oid_dest, size_t *dest_len, oid *oid_src, size_t src_len)
 {
   int	i;
 
-  for (i = 0; i < src_len; i++) 
+  for (i = 0; i < src_len; i++) {
     oid_dest[i] = oid_src[i];
+  }
 
   *dest_len = src_len;
 }
@@ -186,6 +209,7 @@ oid_list_add (struct ilo_oid_list **head, struct ilo_oid_list *oid_list)
 static void 
 print_oid (struct ilo_oid_list *oid_list)
 {
+  int oid_num = 0;
 
   while (oid_list != NULL) 
     {
@@ -312,7 +336,7 @@ get_ilo_oid_list (struct snmp_session *session, oid *target_oid,
   size_t cur_oid_len;
 
   struct snmp_pdu *pdu_ptr, *response_ptr;
-  netsnmp_variable_list	*var_list;
+  netsnmp_variable_list	*var_list,*var_list_prev=NULL;
   struct ilo_oid_list *oid_list;
 
   struct ilo_snmp_priv *priv_ptr = container_of(error_ptr, 
@@ -344,11 +368,11 @@ get_ilo_oid_list (struct snmp_session *session, oid *target_oid,
       if (status == STAT_SUCCESS && response_ptr->errstat == SNMP_ERR_NOERROR) 
 	{
 
-	  var_list = response_ptr->variables;
+	  var_list = var_list_prev =response_ptr->variables;
 		
 	  /* Add each element of the netsnmp variable list to 
 	     struct ilo_oid_list.  */
-	  while (var_list->next_variable) 
+	  while (var_list) 
 	    {
 	      if (netsnmp_oid_is_subtree(target_oid, 
 	  				 target_oid_len,
@@ -368,9 +392,10 @@ get_ilo_oid_list (struct snmp_session *session, oid *target_oid,
 		}
 
 	      oid_list_add(&priv_ptr->oid_list, oid_list);
-
+	      var_list_prev = var_list;
 	      var_list = var_list->next_variable;
 	    }
+	    var_list=var_list_prev;
 
 	  if ((var_list->type == SNMP_ENDOFMIBVIEW) ||
 	      (var_list->type == SNMP_NOSUCHOBJECT) ||
@@ -380,17 +405,14 @@ get_ilo_oid_list (struct snmp_session *session, oid *target_oid,
 	    } 
 	  else 
 	    {
-	      oid_copy(cur_oid, &cur_oid_len, var_list->name,
-		       var_list->name_length);
+		oid_copy(cur_oid, &cur_oid_len, var_list->name,var_list->name_length);
 	    }
-
-		  
 	} 
       else 
 	{ /* Cannot get the response */
 	  if (status == STAT_SUCCESS) 
 	    {
-	      ILO_ERR_DEBUG(error_ptr, "Cannot get theresponse: %s\n",
+	      ILO_ERR_DEBUG(error_ptr, "Cannot get the response: %s\n",
 			    snmp_errstring(response_ptr->errstat));
 	    } 
 	  else 
@@ -428,13 +450,171 @@ free_priv_data (struct ilo_snmp_priv * priv_ptr)
 }
 
 
-/* Print the retrieved OID info.  */
+/* Get the service detailed information. */
+service_details_print_oid_info (struct ilo_oid_list **oid_list_ptr, int *oid) {
+	struct ilo_oid_list *oid_list = *oid_list_ptr;
+	struct inst *instance,*tmp = NULL;
+	char **table_ele;
+	int tbl_ele, inst_id, inst_last = -1;
+	int count = 0, newinst = 0, inst_store[512] = {0};
+	char i, str_len = 0;
+	char buf[1024] = {0}, *oid_str, *json_c = NULL, pBuf[128] = {0};
+
+	switch (*oid) {
+		case 1:	
+			table_ele = &ps_tbl_ele;
+			break;
+		case 2: 
+			table_ele = &fan_tbl_ele;
+			break;
+		case 3: 
+			table_ele = &temp_tbl_ele;
+			break;
+		case 4: 
+			table_ele = &st_tbl_ele;
+			break;
+		case 5: 
+			table_ele = &mem_tbl_ele;
+			break;
+		case 6: 
+			table_ele = &pro_tbl_ele;
+			break;
+		case 7: 
+			table_ele = &net_tbl_ele;
+			break;
+		default:
+			break;
+	}
+
+  	while (oid_list != NULL ) {
+		switch (*oid) {
+		case 4: 
+			inst_id = oid_list->name[oid_list->name_len-4];
+			tbl_ele = oid_list->name[oid_list->name_len-2];
+			break;
+		case 5: 
+		case 6: 
+		case 7: 
+			inst_id = oid_list->name[oid_list->name_len-1];
+			tbl_ele = oid_list->name[oid_list->name_len-2];
+			break;
+		default: 
+			inst_id = oid_list->name[oid_list->name_len-1];
+			tbl_ele = oid_list->name[oid_list->name_len-3];
+			break;
+		}
+		/* Create instance */
+		if ( inst_last < inst_id ) {
+			instance = (struct inst *) malloc(sizeof (struct inst *));
+
+			/* Create object for each instance */
+			/* Store each inst_id in inst_store[] and record the last inst_id for inst_last */
+			if (instance != NULL)
+			{
+				inst_store[list->inst_count] = inst_id;
+				list->inst_count++;
+				inst_last = inst_id;
+				instance->json_doc = (char *) malloc(sizeof(char)*1024);
+				sprintf(buf, "\"%d\": \{", inst_id);
+				strncpy(instance->json_doc,buf,strlen(buf));
+				instance->bytes_cons = strlen(buf);
+				instance->next=NULL;
+				newinst=1;
+
+				if(list->obj == NULL)
+				{
+					list->obj = instance;
+				} else
+				{
+					tmp = list->obj;
+					while(tmp->next != NULL)
+						tmp = tmp->next;
+					tmp->next = instance;	
+				}
+			}
+		}
+		/* Add object into each instance*/ 
+		else
+		{
+			newinst = 0;
+			tmp = list->obj;
+			count = 0;
+			/* Match instance by inst_id*/
+			while(inst_store[count] != inst_id)
+			{
+				tmp = tmp->next;
+				count++;
+			}
+			instance = tmp;
+			tmp = NULL;
+		}
+		/* Store each instances OID information in respective objects */
+		if (instance != NULL  && instance->json_doc != NULL){
+			switch (oid_list->type) 
+			{
+			case ASN_INTEGER:
+	 			sprintf(buf, "\"%s\":%d",table_ele[tbl_ele-1],oid_list->integer);
+	  			break;
+			case ASN_OCTET_STR:
+	  			if (is_hex_str(oid_list->string, oid_list->value_len) == TRUE) {
+					 copy_hex_str(oid_list->string, oid_list->value_len, pBuf, 128);
+					 sprintf(buf, "\"%s\":\"%s\"", table_ele[tbl_ele-1], pBuf);
+				}
+	  			else { 
+					oid_str = oid_list->string;
+					if ( *oid_str == ' ')
+					{
+						sprintf (oid_str, "%s", "");
+						sprintf(buf, "\"%s\":\"%s\"", table_ele[tbl_ele-1], oid_str);
+					}
+					else {
+						sprintf(buf, "\"%s\":\"%s\"", table_ele[tbl_ele-1], oid_list->string);
+					}
+				}
+				break;
+			case ASN_IPADDRESS:
+				sprintf(buf, "\"%s\":\"%s\"", table_ele[tbl_ele-1], oid_list->string);
+				break;
+			case ASN_COUNTER:
+	 			sprintf(buf, "\"%s\":%d",table_ele[tbl_ele-1],oid_list->integer);
+				break;
+			case ASN_GAUGE:
+	 			sprintf(buf, "\"%s\":%d",table_ele[tbl_ele-1],oid_list->integer);
+				break;
+			default:
+				sprintf(buf, "\"%d\":\"%s\"",tbl_ele,"null");
+				break;
+			}
+			if(!newinst)
+			{
+				json_c = &(instance->json_doc[instance->bytes_cons]);
+				strcpy(json_c,",");
+				instance->bytes_cons++;
+			}
+			json_c = &(instance->json_doc[instance->bytes_cons]);
+			strncpy(json_c,buf,strlen(buf));
+			instance->bytes_cons = instance->bytes_cons+strlen(buf);
+		}
+
+		instance = tmp = NULL;
+		memset(buf,0,sizeof(buf));
+		oid_list = oid_list->next;
+	}
+	tmp = list->obj;
+	while(tmp != NULL){
+		json_c = &(tmp->json_doc[tmp->bytes_cons]);
+		strcpy(json_c,"}");
+		tmp->bytes_cons++;
+		tmp = tmp->next;
+	}
+}
 
 int
 print_oid_info (int status, struct ilo_oid_list **oid_list_ptr)
 {
 
-  if (status != NAGIOS_CRITICAL) 
+  //if (status != NAGIOS_CRITICAL) 
+  if (status != NAGIOS_ILO_FAIL_STATUS) 
     {
       print_oid(*oid_list_ptr);
     } 

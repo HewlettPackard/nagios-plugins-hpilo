@@ -1,5 +1,5 @@
 /* nagios_hpilo_engine.h -- types and prototypes used by nagios iLO engine 
-   (C) Copyright [2015] Hewlett-Packard Development Company, L.P.
+   (C) Copyright [2015] Hewlett-Packard Enterprise Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -25,16 +25,15 @@
 #include "nagios_hpilo_common.h"
 
 /* Macro definition */
-#define USAGE	"-H <IP Address> -C <SNMP Community> -o <oid_index> [-h] [-V]"
+#define USAGE	"-H <IP Address> -C <SNMP Community> -o <oid_index> [-h] [-V] [-J]"
 
 /* Available options for this plugin.  */ 
-#define SHORT_OPTIONS "hVC:H:o:"
+#define SHORT_OPTIONS "hJVC:H:o:"
 
 /* The required the number of arguments for this plugin.  */
 #define NAGIOS_ILO_REQUIRE_ARGC	3
 
-#define IDX_OUT_OF_RANGE(idx, array) \
-	((idx < 0 || idx > NUM_ELEMENTS(array)) ? TRUE : FALSE)
+#define IDX_OUT_OF_RANGE(idx, array) 	((idx < 0 || idx >= NUM_ELEMENTS(array)) ? TRUE : FALSE)
 
 #define ILO_OID_NAME_LEN	24 
 
@@ -55,6 +54,7 @@ static char help_string[][128] =
    "-C, --community=SNMP_COMMINUTY\n\tSNMP comminuty string. "
    "For example: -C public or --community=public",
    "-o, --oid=oid_index\n\tOID index",
+   "-J, --json\nprint the oid data in json format",
    "-V, --version\n\tprint the version number",
    "-h, --help\n\tprint this help menu"
   };
@@ -66,6 +66,7 @@ static struct option long_options[] =
     {"community",	required_argument,	0,	'C'},
     {"oid",		required_argument,	0,	'o'},
     {"version",		no_argument,		0,	'V'},
+    {"json",		no_argument,		0,	'J'},
     {"help",		no_argument,		0,	'h'},
     {0,			0,			0,	  0}
   };
@@ -153,6 +154,7 @@ struct ilo_oid_info
 /* Callback functions.  */
 static enum Nagios_status parse_status(void **, int *);
 static enum Nagios_status parse_status_array(void **, int *);
+static enum Nagios_status health_status_array(void **, int *);
 static enum Nagios_status get_hlth_status_str(struct ilo_oid_list **, void *);
 static enum Nagios_status get_redundant_status_str(struct ilo_oid_list **,void *);
 static enum Nagios_status get_oid_str(struct ilo_oid_list **,void *);

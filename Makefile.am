@@ -1,3 +1,3 @@
 CXXFLAGS = -O3
 
-SUBDIRS = src scripts
+SUBDIRS = src scripts conf.d action-url

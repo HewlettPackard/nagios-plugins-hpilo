@@ -62,11 +62,6 @@ am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = config.h
-NAGIOS_INIT_FILE = /etc/init.d/nagios 
-NAGIOS3_INIT_FILE = /etc/init.d/nagios3 
-SNMPTRAPD_CONF = /etc/snmp/snmptrapd.conf
-HPILO_CFG_GEN = nagios_hpilo_cfg_generator
-HPILO_TRAPS = nagios_hpilo_traps
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 SOURCES =
@@ -220,7 +215,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 CXXFLAGS = -O3
-SUBDIRS = src scripts
+SUBDIRS = src scripts conf.d action-url
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -306,7 +301,6 @@ $(RECURSIVE_TARGETS):
 	  $(MAKE) $(AM_MAKEFLAGS) "$$target-am" || exit 1; \
 	fi; test -z "$$fail"
 
-	
 $(RECURSIVE_CLEAN_TARGETS):
 	@fail= failcom='exit 1'; \
 	for f in x $$MAKEFLAGS; do \
@@ -606,41 +600,8 @@ installdirs-am:
 install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
-uninstall: uninstall-config uninstall-recursive
-uninstall-config:
-	@if test -e $(NAGIOS_INIT_FILE); then \
-                NAGIOS_CFG_FILE_PATH=`grep "^prefix" /etc/init.d/nagios | cut -d '=' -f 2`; \
-                NAGIOS_CFG_FILE=$$NAGIOS_CFG_FILE_PATH/etc/nagios.cfg; \
-                NAGIOS_PATH=`dirname $$NAGIOS_CFG_FILE`; \
-                ILO_CFG_LINE_NO=`grep -n "cfg_dir=$$NAGIOS_PATH/ilo" $$NAGIOS_CFG_FILE | cut -d ':' -f 1`; \
-                if test -n "$$ILO_CFG_LINE_NO"; then \
-                        sed -e "$$ILO_CFG_LINE_NO d" $$NAGIOS_CFG_FILE > /tmp/tmp.txt; \
-                        mv /tmp/tmp.txt $$NAGIOS_CFG_FILE; \
-                fi; \
-                rm -rf $$NAGIOS_PATH/ilo; \
-                /etc/init.d/nagios reload; \
-        fi
-	@if test -e $(NAGIOS3_INIT_FILE); then \
-		NAGIOS3_CFG_FILE=`grep "^NAGIOSCFG" /etc/init.d/nagios3 | cut -d '=' -f 2 | tr -d '"'`; \
-                NAGIOS_PATH=`dirname $$NAGIOS3_CFG_FILE`; \
-                ILO_CFG_LINE_NO=`grep -n "cfg_dir=$$NAGIOS_PATH/ilo" $$NAGIOS3_CFG_FILE | cut -d ':' -f 1`; \
-                if test -n "$$ILO_CFG_LINE_NO"; then \
-                        sed -e "$$ILO_CFG_LINE_NO d" $$NAGIOS3_CFG_FILE > /tmp/tmp.txt; \
-                        mv /tmp/tmp.txt $$NAGIOS3_CFG_FILE; \
-                fi; \
-                rm -rf $$NAGIOS_PATH/ilo; \
-                /etc/init.d/nagios3 reload; \
-        fi
-	@if test -e $(SNMPTRAPD_CONF); then \
-                cat $(SNMPTRAPD_CONF) | sed -e "/$(HPILO_CFG_GEN)/d" | sed -e "/$(HPILO_TRAPS)/d" > /tmp/tmp.txt; \
-                mv /tmp/tmp.txt $(SNMPTRAPD_CONF); \
-                if test -e /etc/init.d/snmptrapd; then \
-                         service snmptrapd restart; \
-                else \
-                        killall snmptrapd &> /dev/null; \
-                        snmptrapd -C -c $(SNMPTRAPD_CONF) -Lf /var/log/net-snmptrapd.log; \
-                fi; \
-        fi
+uninstall: uninstall-recursive
+
 install-am: all-am
 	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am install-data-am
 
@@ -734,6 +695,7 @@ ps: ps-recursive
 ps-am:
 
 uninstall-am:
+
 .MAKE: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) all \
 	ctags-recursive install-am install-strip tags-recursive
 
