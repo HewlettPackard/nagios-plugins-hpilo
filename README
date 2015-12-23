@@ -99,3 +99,4 @@ FAQ:
 ----
 Q: Always scan total hosts '0' of a lots of hosts.
 A: Check if curl and nmap are correctly installed.
+
