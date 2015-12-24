@@ -23,7 +23,7 @@ Requirements:
 {rhel}
 - net-snmp-utils
 - glibc-devel
-{suse_version < 1200}
+{sles 11}
 - apache2-mod_php53
 
 Features:
@@ -52,4 +52,25 @@ Features:
 
 4) Categorize the preferred servers into the same host group.
 
+
+Installation:
+------------
+Read INSTALL file.
+
+Configuration:
+--------------
+Go  to the default folder
+/usr/local/nagios/libexec        on Rhel/Sles
+/usr/lib/nagios/plugins          on ubuntu
+
+The hpiLO_nagios_config auto configuration script will generate configuration 
+file and configure nagios hostgroup by scanning network IP range or network subnet.
+
+# ./hpiLO_nagios_config 
+
+Uninstallation:
+---------------
+Read INSTALL file.
+Users need back up the ilo.cfg file for later usage before uninstallation.
+The file could be in /usr/local/nagios/etc/ilo or /etc/nagios/ilo depends on how users install nagios.
 
