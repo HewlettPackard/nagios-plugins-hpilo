@@ -1,0 +1,1597 @@
+#!/bin/bash
+#
+# nagios_hpeilo_cfg_generator -- The script aims to automatically generate
+#				nagios configuration once discovering the
+#				HPE ProLiant Servers. 
+#  (C) Copyright [2015] Hewlett Packard Enterprise Development Company, L.P.
+#
+#  This program is free software; you can redistribute it and/or modify 
+#  it under the terms of version 2 of the GNU General Public License as 
+#  published by the Free Software Foundation.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+#
+#  See the GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License 
+#  along with this program; if not, write to:
+#   Free Software Foundation, Inc.
+#   51 Franklin Street, Fifth Floor
+#   Boston, MA 02110-1301, USA. 
+#
+#  Written by Adrian Huang <adrian.huang@hp.com>.
+
+prefix=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+NagiosLibexec="${prefix}"
+NagiosHpiloEngine="nagios_hpeilo_engine"
+NagiosHpHltStatusHnd="nagios_hpeilo_health_service"
+NagiosHpTrapCmd="nagios_hpeilo_traps"
+HpiloXmlFile="/tmp/ilo_xml_content.xml"
+HpiloXmlTag=(SPN PN UUID)
+HpiloHostgroup="hpeilo-servers"
+HpiloProductOid="1.3.6.1.4.1.232.2.2.4.2"
+HpiloLogFile="/var/log/nagios_hpeilo_cfg_generator.log"
+HpiloSnmpComm="public" # hpeilo ilo community string
+HpiloServices=("System Status" "Fans" "Memory" "Network" "Power Supplies" "Processors" "Storage" "Temperatures")
+HpiloServiceGroup="servicegroup_name"
+
+CheckInterval=5 # 5-minute interval
+MaxAttempts=10
+IPV4AddrEntries=4
+
+# The mode to discover servers: Active discovery and passive discovery
+ActiveDisc=1
+PassiveDisc=2
+ConfigDisc=3
+
+DiscModes=($ActiveDisc $PassiveDisc $ConfigDisc)
+
+LockFile="/tmp/nagios_hpeilo.lock"
+TmpFile="/tmp/tmp.txt"
+
+# SNMP variables
+SnmpPort=161
+
+#Variables
+cfg_file=0
+cfg_interface=0
+
+
+# Nmap defintion
+NmapMinVersion=5.20
+NmapSnmpPortProto="$SnmpPort/udp"
+NmapLogFile="/tmp/nmap_result.log"
+NmapScanReportStr="Nmap scan report for"
+
+#snmptrapd configuration definitions
+SNMPTRAPD_AUTH_COMM="authCommunity log,execute,net public"
+HPILO_CFG_GEN="nagios_hpeilo_cfg_generator"
+HPILO_TRAPS="nagios_hpeilo_traps"
+#NAGIOS_ILO_CONFIG_FILE="hpiLO_nagios_plugin.cfg"
+SNMPTRAPD_AUTH="authCommunity log,execute,net"
+
+# Find the path
+NAGIOS_ILO_PLUGINS_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+NAGIOS_INST_PATH="${prefix}"
+SNMPTRAPD_CONF=`find /etc  -name snmptrapd.conf`
+#NAGIOS_ILO_CONFIG_PATH=`find /usr/local/ -name $NAGIOS_ILO_CONFIG_FILE | xargs dirname`
+# If the snmptrapd.conf is not existed, the default file path is used.
+if [ "$SNMPTRAPD_CONF" = "" ]; then
+	SNMPTRAPD_CONF="/etc/snmp/snmptrapd.conf"
+fi
+
+#help display 
+function print_help() {
+echo -e "-m\n\tThe mode to discover servers."
+echo -e "\t\tMode Number\tDescription"
+echo -e "\t\t-------------------------------"
+echo -e "\t\t1\t\tActive discovery"
+echo -e "\t\t2\t\tPassive discovery"
+echo -e "-i\n\tThe network interface (eth0, ethX) of your host. Note this option must be applied if the mode is active"
+echo -e "-s\n\tThe host/server group definition file"
+echo -e "-o\n\tOverwrite iLO configuration (ilo.cfg) file"
+echo -e "-v\n\tVerbose mode"
+echo -e "-h, --help\n\tPrint this help menu"
+
+}
+
+#input format
+function usage() {
+echo -e "$0 -m mode_number [-i network_interface] [-s host-group-file] [-o] [-h|--help] [-v]"
+}
+
+#nmap comparison
+function compare_version() {
+local	IFS=.
+local	v1=($1)
+local	v2=($2)
+local	ret=0
+local	idx=
+
+if [ ${#v1[@]} -eq ${#v2[@]} ]; then
+
+	# The number of entries is identical, so go for 
+	# comparing each version entry
+	for((idx=0;idx<${#v1[@]};idx++)); do
+		diff=$((v1[idx]-v2[idx]))
+
+		if [ $diff -ne 0 ]; then
+			[ $diff -lt 0 ] && ret=-1 || ret=1
+			break;
+		fi
+	done
+
+else
+	# Cannot compare! The length of these versions are different.
+	ret=-2
+fi
+
+echo "$ret"
+}
+
+#Remove traphandle in snmptrap.conf, If passive discovery disabled
+function remove_traphandle() {
+if [[ -f $SNMPTRAPD_CONF ]]; then
+	cat $SNMPTRAPD_CONF |   sed -e "/$HPILO_CFG_GEN/d" | \
+                                sed -e "/$HPILO_TRAPS/d" > /tmp/tmp.txt
+        mv /tmp/tmp.txt $SNMPTRAPD_CONF
+fi
+}
+
+#configure snmptrapd file
+function snmptrapd_config() {
+# Get the Nagios status
+`find /etc/init.d/ -name "nagios*" -print` status &> /dev/null
+[ $? -eq 0 ] && echo -e "\t\t\t[Done]" || echo -e "\t\t\t[Failed]"
+
+# Check if the Nagios daemon is started.
+if [ $? -ne 0 ]; then
+	# The Nagios is not started yet. Start the daemon right away.
+	`find /etc/init.d/ -name "nagios*" -print` start
+fi
+
+# Add traphandle statements
+if [ ${#HostGroup[@]} -eq 0 ] && [ "$passive_disc" -eq "1" ]; then
+	[ "`grep "$SNMPTRAPD_AUTH_COMM" $SNMPTRAPD_CONF 2> /dev/null`" = "" ] && \
+	echo $SNMPTRAPD_AUTH_COMM >> $SNMPTRAPD_CONF
+else
+	for((idx=0;idx<${#HostGroup_TrapCommStr[@]};idx++)); do
+	  comm_auth=`echo $SNMPTRAPD_AUTH ${HostGroup_TrapCommStr[$idx]}`
+	  if [ "$passive_disc" -eq "1" ]; then
+	  [ "`grep "$comm_auth" $SNMPTRAPD_CONF 2> /dev/null`" = "" ] && \
+	  echo $comm_auth >> $SNMPTRAPD_CONF
+	  fi
+	done
+fi
+
+if [ "`grep "$HPILO_CFG_GEN" $SNMPTRAPD_CONF`" = "" ] && \
+		[ "`grep "$HPILO_TRAPS" $SNMPTRAPD_CONF`" = "" ]; then
+	snmptrap_handle
+else
+	remove_traphandle
+	snmptrap_handle
+fi
+        restart_snmptrapd
+}
+
+function restart_snmptrapd() {
+if [[ -f $SNMPTRAPD_CONF ]]; then
+	echo "Restart snmptrapd"
+	# restart snmptrapd
+	if [ -f /etc/redhat-release ] ; then
+		#rhel
+		/sbin/service snmptrapd restart
+	else
+		killall snmptrapd &> /dev/null
+		snmptrapd -C -c $SNMPTRAPD_CONF -Lf /var/log/net-snmptrapd.log
+	fi
+	
+	[ $? -eq 0 ] && echo -e "\t\t\t[Done]" || echo -e "\t\t\t[Failed]"
+fi
+}
+
+function snmptrap_handle {
+	echo "traphandle 1.3.6.1.6.3.1.1.5.1 \
+        $NAGIOS_INST_PATH/$HPILO_CFG_GEN -m 2 -s $HostGroupCfgFile" >> $SNMPTRAPD_CONF
+        echo "traphandle 1.3.6.1.4.1.232.0.* \
+        $NAGIOS_INST_PATH/$HPILO_TRAPS" >> $SNMPTRAPD_CONF
+}
+
+#Read host group
+function read_host_group() {
+local	host_group_entries=0
+
+while read line
+do
+	# ignore the space line
+	if [ "x${line}" = "x" ]; then
+		continue
+	fi
+
+	# ignore the comment lines
+	if [ "x$(echo $line | grep -E \"^#\")" != "x" ]; then
+		continue
+	fi
+
+	# Get the name of the host group
+	HostGroup[$host_group_entries]=`echo $line | awk -F , '{print $1}'`
+
+	# Get the IP address or Subnet
+	HostGroupIPAddr[$host_group_entries]=`echo $line | awk -F , '{print $2}'`
+
+	host_group_entries=$(($host_group_entries+1))
+
+done < "$HostGroupCfgFile"
+}
+
+#Read contact group
+function read_contact_group() {
+local	contact_group_entries=0
+
+while read line
+do
+	# ignore the space line
+	if [ "x${line}" = "x" ]; then
+		continue
+	fi
+
+	# ignore the comment lines
+	if [ "x$(echo $line | grep -E \"^#\")" != "x" ]; then
+		continue
+	fi
+
+	# Get the name of the host group
+	contact_name[$contact_group_entries]=`echo $line | awk -F , '{print $1}'`
+
+	contact_group_entries=$(($contact_group_entries+1))
+
+done < "$HostGroupCfgFile"
+}
+
+#Read host group definition file
+######################################
+function read_config_file() {
+local temp=
+local host_group_entries=
+local contact_entries=
+
+if [ $mode -eq 2 ] && [ $cfg_file -eq 1 ]; then
+	echo
+else
+	echo "Reading host-group configuration file : $HostGroupCfgFile"
+
+fi
+while read line
+do
+	if [ "x${line}" = "x" ]; then
+		continue
+	fi
+	# ignore the comment lines
+	if [ "x$(echo $line | grep -E "^#")" != "x" ]; then
+		continue
+	fi
+	config_type=`echo $line | awk '{print $1}'`
+	case "$config_type" in
+		PASSIVE_DISCOVERY)
+		passive_disc=`echo $line | awk '{print $2}'`
+		;;
+		ACTIVE_DISCOVERY)
+		active_disc=`echo $line | awk '{print $2}'`
+		;;
+		HOSTGROUP:)
+		temp=`echo $line | awk -F: '{print $2}'`
+		host_group_entries=${#HostGroup[@]}
+		# Get the name of the host group
+		HostGroup[$host_group_entries]=`echo $temp | awk -F , '{print $1}'`
+		# Get the IP address or Subnet
+		HostGroupIPAddr[$host_group_entries]=`echo $temp | awk -F , '{print $2}'`
+		#Get communitiy string , defualt is public
+		HostGroup_ReadCommStr[$host_group_entries]=`echo $temp | awk -F , '{print $3}'`
+		HostGroup_TrapCommStr[$host_group_entries]=`echo $temp | awk -F , '{print $4}'`
+		if [ "x${HostGroup_ReadCommStr[$host_group_entries]}" = "x" ]; then
+			HostGroup_ReadCommStr[$host_group_entries]=$HpiloSnmpComm
+		fi
+		if [ "x${HostGroup_TrapCommStr[$host_group_entries]}" = "x" ]; then
+			HostGroup_TrapCommStr[$host_group_entries]=$HpiloSnmpComm
+		fi
+		;;
+		CHECK_INTERVAL)
+		CheckInterval=`echo $line | awk '{print $2}'`
+		;;
+		NAGIOS_HOSTIP)
+		NAGIOS_HOSTIP=`echo $line | awk '{print $2}'`
+		;;
+                CONTACT:)
+                contemp=`echo $line | awk -F: '{print $2}'`
+		contact_entries=${#contact_name[@]}
+		# Get the name of the contacts
+		contact_name[$contact_entries]=`echo $contemp | awk -F , '{print $1}'`
+		contact_alias[$contact_entries]=`echo $contemp | awk -F , '{print $2}'`
+		contact_mail_id[$contact_entries]=`echo $contemp | awk -F , '{print $3}'`
+                ;;		
+		CONTACTGROUP:)
+                conGtemp=`echo $line | awk -F: '{print $2}'`
+                contactgrp_entries=${#ContactgrpInfo[@]}
+		# Get the name of the contact group
+		contact_grp_name[contactgrp_entries]=`echo $conGtemp | awk -F , '{print $1}'`
+		contact_grp_alias[contactgrp_entries]=`echo $conGtemp | awk -F , '{print $2}'`
+		;;		
+		*)
+		;;
+	esac
+done <  "$HostGroupCfgFile"
+}
+
+
+##########################
+# $1: Number bit of the subnet mask
+function get_subnet_mask() {
+local	number_255_entries=$(($1/8))
+local	suffix_bits=$(($1%8))
+local	saveIFS=$IFS
+local	subnet_mask_tmp=
+local	idx=
+
+IFS="."
+
+# Fill the 255' portions. For 172.16.0.0/23, subnet_mask_tmp should
+# be 255.255.x.x
+for((idx=0;idx<$number_255_entries;idx++)); do
+	subnet_mask_tmp[$idx]=255
+done
+
+
+# Fill the non-255' portions. For 172.16.0.0/23, subnet_mask_tmp should
+# be 255.255.254.0
+if [ $idx -lt $IPV4AddrEntries ]; then
+	if [ "$suffix_bits" != "0" ]; then
+		subnet_mask_tmp[$idx]=$((255 - ((1 << (8 - $suffix_bits)) -1)))
+	else
+		subnet_mask_tmp[$idx]=0
+	fi
+
+	idx=$(($idx+1))
+	for((;idx<$IPV4AddrEntries;idx++)); do
+		subnet_mask_tmp[$idx]=0
+	done
+fi
+
+# Print the subnet mask. Something like 255.255.254.0.
+echo "${subnet_mask_tmp[*]}"
+
+IFS=$saveIFS
+}
+
+# $1: host ip address
+# $2: Subnet address and/or number bits of the subnet mask. For example, this 
+#     field can be 192.168.1.1 or 192.168.1.0/24.
+function is_host_in_ip_range() {
+local	host_ip_address=$1
+local	ip_address=`echo $2 | awk -F '/' '{print $1}'`
+local 	ip_address2=`echo $2 | awk -F '-' '{print $2}'`
+local	subnet_mask_bits=`echo $2 | awk -F '/' '{print $2}'`
+local	bool="False"
+local	subnet_mask=
+local	idx=0
+
+# The IP address is applied only. 
+if [ "x${subnet_mask_bits}" = "x" ];then
+	if [ "$1" = "$ip_address" ]; then
+		bool="True"
+	elif [ "x${ip_address2}" != "x" ];then
+		ip_address=`echo $2 | awk -F '-' '{print $1}'`
+		local OIFS=$IFS
+		IFS='.'
+		local ip1=($ip_address)
+		local ip2=($ip_address2)
+		local host_ip=($host_ip_address)
+		IFS=$OIFS
+	 	bool="True"
+	    	if [ ${host_ip[0]} -lt ${ip1[0]} ] || [ ${host_ip[0]} -gt ${ip2[0]} ]; then
+	        	bool="False"
+	    	elif [ ${host_ip[1]} -lt ${ip1[1]} ] || [ ${host_ip[1]} -gt ${ip2[1]} ]; then
+	    		bool="False"
+	    	elif [ ${host_ip[2]} -lt ${ip1[2]} ] || [ ${host_ip[2]} -gt ${ip2[2]} ]; then
+	        	bool="False"
+	    	elif  [ ${host_ip[2]} -le ${ip1[2]} ] && [ ${host_ip[3]} -lt ${ip1[3]} ]  || [ ${host_ip[3]} -gt ${ip2[3]} ]; then
+	        	bool="False"
+	     	fi
+	fi
+else # Subnet address + number bits of the subnet mask.
+	local	field=
+	local	host_ip_netry=
+	local	ip_entry=
+	local	subnet_mask_entry=
+
+
+	# Get the subnet mask format (for example: 255.255.255.0) from
+	# the number bits of the subnet mask
+	subnet_mask=$(get_subnet_mask $subnet_mask_bits)
+
+	bool="True"
+
+	# Check if the host IP address is in this subnet
+	for((idx=0;idx<$IPV4AddrEntries;idx++)); do
+		field=$(($idx+1))
+		host_ip_entry=`echo $host_ip_address | awk -F '.' '{print $'$field'}'` 
+		ip_entry=`echo $ip_address | awk -F '.' '{print $'$field'}'` 
+		subnet_mask_entry=`echo $subnet_mask | awk -F '.' '{print $'$field'}'` 
+
+		host_ip_entry=$(($host_ip_entry & subnet_mask_entry))
+		ip_entry=$(($ip_entry & subnet_mask_entry))
+
+		if [ "$host_ip_entry" != "$ip_entry" ]; then
+			bool="False"
+			break
+		fi
+	done
+fi
+
+echo $bool
+}
+
+	function read_xml_entity() {
+	local	IFS=\>
+	read -d \< tag value
+}
+
+function parse_xml() {
+while read_xml_entity; do
+	if [[ $tag = "$1" ]]; then
+		break;
+	fi
+done < $HpiloXmlFile
+}
+
+#$1: The path of nmap
+function check_nmap_version() {
+local	local_ver=`$1 --version | grep version | cut -d ' ' -f3`
+local	result=
+
+result=$(compare_version $local_ver $NmapMinVersion)
+
+if [ $result -eq -2 ]; then
+	echo "[Error]: Different version length! Cannot compare the nmap version ($local_ver) of your system and the required minimal version ($NmapMinVersion)."
+	exit 1
+elif [ $result -eq -1 ]; then
+	echo "[Error]: Your local nmap version is '$local_ver'. The minimal version is '$NmapMinVersion'. Please upgrade nmap."
+	exit 1
+fi
+
+}
+
+# $1: The nmap entry for each host
+function parse_nmap_entry() {
+local	ip_address=
+local	nmap_state=
+local	IFS=' '
+
+# Get the IP address from each entry
+ip_address=`echo $1 | grep "Nmap scan report for" |  grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}'`
+
+write_log "checking IP: $ip_address"
+
+# Get the info of the STATE field
+nmap_state=`echo $1 | grep -w $NmapSnmpPortProto | cut -d ' ' -f2`
+
+# The server has the up and running snmp agent
+if [ "$nmap_state" = "open" ]; then
+	check_ilo_device $ip_address
+
+	# New iLO device
+	if [ $? -eq 0 ]; then
+		write_nagios_cfg_file $ip_address
+
+		# reload nagios configuration files
+		`service $NagiosService reload > /dev/null`
+		if [ $VerboseMode -eq 0 ]; then
+		       write_log -e "The server '${IloXmlTag[0]}' with IP address '$ip_address' is added"
+		       num_host_added=$(($num_host_added+1))
+	       fi
+	fi
+
+fi
+}
+
+# $1: The number of hosts has been processed
+# $2: Total hosts
+function update_active_disc_progress() {
+echo -ne "Progress: $(($1*100/$2))% (scanned $1 of $2 hosts)\r"
+}
+
+############################################################
+# $1: The number of offline hosts
+# $2: The number of online hosts to discover
+############################################################
+# Template for nmap output: Ahead of "Nmap scan report".
+############################################################
+# Nmap scan report for 16.153.113.5
+# Host is up (0.00058s latency).
+# PORT    STATE SERVICE
+# 161/udp open  snmp
+# | snmp-sysdescr: Integrated Lights-Out 4 1.30 Mar 18 2013
+# |_  System uptime: 40 days, 11:15:49.94 (349654994 timeticks)
+# MAC Address: 9C:8E:99:6E:0C:FA (Hewlett-Packard Enterprise Company)
+#
+# Nmap scan report for 16.153.113.7
+# Host is up (0.00015s latency).
+# PORT    STATE  SERVICE
+# 161/udp closed snmp
+# MAC Address: 98:4B:E1:04:F8:7E (Hewlett-Packard Enterprise Company)
+#
+# Nmap scan report for 16.153.113.8
+# Host is up (0.00011s latency).
+# PORT    STATE         SERVICE
+# 161/udp open|filtered snmp
+# MAC Address: 3C:D9:2B:08:95:92 (Hewlett-Packard Enterprise Company)
+# ............................................
+# ............................................
+##############################################################
+function parse_nmap_report() {
+local	line_num_list=	
+local	entry=		# the entry is started from "NmapScanReportStr"
+local	cur_et_line=0	# current entry line
+local	nx_et_line=0	# next entry line
+
+NumHostsProcessed=$(($NumHostsProcessed+$1))
+
+# Update process 
+update_active_disc_progress "$NumHostsProcessed" "$2"
+
+# Collecting the line number for the string ahead of 
+# "NmapScanReportStr"
+line_num_list=`grep -n "$NmapScanReportStr" $NmapLogFile | cut -d ':' -f1`
+
+# Append the last line number of the file NmapLogFile to
+# line_num_list variable
+line_num_list=`echo $line_num_list;(wc -l $NmapLogFile | cut -d ' ' -f1)`
+for nx_et_line in $line_num_list; do
+	if [ $cur_et_line -ne 0 ]; then
+		entry=`sed -n "${cur_et_line},$(($nx_et_line-1)) p" $NmapLogFile`
+
+		parse_nmap_entry "$entry"
+
+		NumHostsProcessed=$(($NumHostsProcessed+1))
+
+		# Update process 
+		update_active_disc_progress "$NumHostsProcessed" "$2"
+	fi
+
+	cur_et_line=$nx_et_line
+done
+
+}
+
+# $1: IP address
+function get_xml_content() {
+local idx=0
+
+# get the xml content from iLO
+`curl http://$1/xmldata?item=all > $HpiloXmlFile 2>/dev/null`
+
+for((idx=0;idx<${#HpiloXmlTag[@]};idx++)); do
+	parse_xml ${HpiloXmlTag[$idx]}
+
+	# index '0' stores Product Name
+	# index '1' stores iLO Info
+	IloXmlTag[$idx]=$value
+done
+
+}
+
+# $1: file name
+# $2: search pattern
+function search_string() {
+local	str=
+
+if [ -f $1 ]; then
+	str=`grep "$2" $1`
+fi	
+
+echo -e "$str"
+}
+
+# argument 1 ($1): The data to be logged
+function write_log() {
+if [ "$VerboseMode" = "1" ]
+then
+	[ $mode -eq $PassiveDisc ] && echo -e "[`date "+%b %d %T"`] $1" >> $HpiloLogFile || echo -e "$1"
+fi
+}
+
+#write generic hosts to ilo config file
+function write_nagios_generic_host_section() {
+	echo -e "define host {"                         >> $NagiosIloCfgFile
+	echo -e "\tname generic-iLO-host"               >> $NagiosIloCfgFile
+	echo -e "\tuse generic-host"			>> $NagiosIloCfgFile
+	echo -e "\tcheck_interval $CheckInterval"       >> $NagiosIloCfgFile
+	echo -e "\tmax_check_attempts $MaxAttempts"     >> $NagiosIloCfgFile
+	echo -e "\tcheck_command check-iLO-host-alive"  >> $NagiosIloCfgFile
+	echo -e "\taction_url https://\$HOSTADDRESS$"	>> $NagiosIloCfgFile
+	echo -e "\t_nagiosip	$NAGIOS_HOSTIP"		>> $NagiosIloCfgFile
+	echo -e "\ticon_image_alt HPE Integrated Lights-Out (iLO)" >> $NagiosIloCfgFile
+	if [ "x${contact_grp_name}" != "x" ]; then	
+		echo -e "\tcontact_groups $contact_grp_name"                          >> $NagiosIloCfgFile
+	fi
+	echo -e "\tregister 0"     			>> $NagiosIloCfgFile
+	echo -e "}\n"					>> $NagiosIloCfgFile
+}
+
+# $1: IP address
+function write_nagios_host_section() {
+echo -e "define host {"				>> $NagiosIloCfgFile
+echo -e "\thost_name ${IloXmlTag[0]}"		>> $NagiosIloCfgFile
+echo -e "\taddress $1"				>> $NagiosIloCfgFile
+echo -e "\t_UUID ${IloXmlTag[2]}"               >> $NagiosIloCfgFile
+echo -e "\t_iLO_SNMP_community $2"		>> $NagiosIloCfgFile
+echo -e "\tuse generic-iLO-host"		>> $NagiosIloCfgFile
+echo -e "}\n"					>> $NagiosIloCfgFile
+}
+
+#write command line format
+function write_nagios_command_section() {
+echo -e "define command {"			>> $NagiosIloCfgFile
+echo -e "\tcommand_name $NagiosHpiloEngine"	>> $NagiosIloCfgFile
+echo -e "\tcommand_line $NagiosLibexec/$NagiosHpiloEngine -H \$HOSTADDRESS\$ -C  \$_HOSTILO_SNMP_COMMUNITY\$ -o \$ARG1\$"			>> $NagiosIloCfgFile
+echo -e	"}\n"					>> $NagiosIloCfgFile
+
+echo -e "define command {"			>> $NagiosIloCfgFile
+echo -e "\tcommand_name check-iLO-host-alive"	>> $NagiosIloCfgFile
+echo -e "\tcommand_line $NagiosLibexec/$NagiosHpiloEngine -H \$HOSTADDRESS\$ -C  \$_HOSTILO_SNMP_COMMUNITY\$ -o 11"			>> $NagiosIloCfgFile
+echo -e	"}\n"					>> $NagiosIloCfgFile
+
+echo -e "define command {"			>> $NagiosIloCfgFile
+echo -e "\tcommand_name $NagiosHpHltStatusHnd"	>> $NagiosIloCfgFile
+echo -e "\tcommand_line $NagiosLibexec/$NagiosHpTrapCmd -A -H \$HOSTADDRESS\$ -C  \$_HOSTILO_SNMP_COMMUNITY\$ -o \$ARG1\$"			>> $NagiosIloCfgFile
+echo -e	"}\n"					>> $NagiosIloCfgFile
+
+}
+
+#write generic services to ilo config file
+function write_nagios_genric_service_section ()
+{
+	echo -e "define service {"             		 >> $NagiosIloCfgFile
+	echo -e "\tname generic-iLO-service"             >> $NagiosIloCfgFile
+	echo -e "\tuse generic-service"             	 >> $NagiosIloCfgFile
+	echo -e "\tpassive_checks_enabled	1" 	 >> $NagiosIloCfgFile
+	echo -e "\tactive_checks_enabled	1" 	 >> $NagiosIloCfgFile
+	echo -e "\tcheck_interval $CheckInterval"	 >> $NagiosIloCfgFile
+	echo -e "\tregister 0"                           >> $NagiosIloCfgFile
+	echo -e "}\n"                          		 >> $NagiosIloCfgFile
+
+	echo -e "define service {"             		 >> $NagiosIloCfgFile
+	echo -e "\tname generic-iLO-Passive-service"     >> $NagiosIloCfgFile
+	echo -e "\tuse generic-service"             	 >> $NagiosIloCfgFile
+	echo -e "\tpassive_checks_enabled	1" 	 >> $NagiosIloCfgFile
+	echo -e "\tactive_checks_enabled	1" 	 >> $NagiosIloCfgFile
+	echo -e "\tcheck_period	24x7"       >> $NagiosIloCfgFile
+	echo -e "\tcheck_interval 2880"        >> $NagiosIloCfgFile
+	echo -e "\tnormal_check_interval 2880"        >> $NagiosIloCfgFile
+	echo -e "\tcheck_freshness                 1"              >> $NagiosIloCfgFile
+	echo -e "\tfreshness_threshold		10800"              >> $NagiosIloCfgFile
+	echo -e "\tregister 0"                           >> $NagiosIloCfgFile
+	echo -e "}\n"                          		 >> $NagiosIloCfgFile
+}
+# $1: host group
+function write_nagios_services_section() {
+local	idx=0
+
+for((idx=0;idx<${#HpiloServices[@]};idx++)); do
+	echo -e "define service {"		>> $NagiosIloCfgFile
+	if [ $idx != 0 ]; then
+		echo -e "\tuse generic-iLO-Passive-service"  >> $NagiosIloCfgFile
+	else
+		echo -e "\tuse generic-iLO-service"	>> $NagiosIloCfgFile
+	fi
+	echo -e "\thostgroup_name $1" 		>> $NagiosIloCfgFile
+	echo -e "\tservice_description ${HpiloServices[$idx]}" >> $NagiosIloCfgFile
+
+	case "$idx" in
+	   1)
+        	echo -e "\taction_url  http://\$_HOSTNAGIOSIP$/$NagiosService/hpeilo/nagios_hpeilo_service_details.php?ip=\$HOSTADDRESS$&comm=\$_HOSTILO_SNMP_COMMUNITY$&id=$(($idx+1))" >> $NagiosIloCfgFile
+		;;
+	   2)
+        	echo -e "\taction_url  http://\$_HOSTNAGIOSIP$/$NagiosService/hpeilo/nagios_hpeilo_service_details.php?ip=\$HOSTADDRESS$&comm=\$_HOSTILO_SNMP_COMMUNITY$&id=$(($idx+3))" >> $NagiosIloCfgFile
+		;;
+	   3)
+        	echo -e "\taction_url  http://\$_HOSTNAGIOSIP$/$NagiosService/hpeilo/nagios_hpeilo_service_details.php?ip=\$HOSTADDRESS$&comm=\$_HOSTILO_SNMP_COMMUNITY$&id=$(($idx+4))" >> $NagiosIloCfgFile
+		;;
+	   4)
+        	echo -e "\taction_url  http://\$_HOSTNAGIOSIP$/$NagiosService/hpeilo/nagios_hpeilo_service_details.php?ip=\$HOSTADDRESS$&comm=\$_HOSTILO_SNMP_COMMUNITY$&id=$(($idx-3))" >> $NagiosIloCfgFile
+		;;
+	   5)
+        	echo -e "\taction_url  http://\$_HOSTNAGIOSIP$/$NagiosService/hpeilo/nagios_hpeilo_service_details.php?ip=\$HOSTADDRESS$&comm=\$_HOSTILO_SNMP_COMMUNITY$&id=$(($idx+1))" >> $NagiosIloCfgFile
+		;;
+	   6)
+        	echo -e "\taction_url  http://\$_HOSTNAGIOSIP$/$NagiosService/hpeilo/nagios_hpeilo_service_details.php?ip=\$HOSTADDRESS$&comm=\$_HOSTILO_SNMP_COMMUNITY$&id=$(($idx-2))" >> $NagiosIloCfgFile
+		;;
+	   7)
+        	echo -e "\taction_url  http://\$_HOSTNAGIOSIP$/$NagiosService/hpeilo/nagios_hpeilo_service_details.php?ip=\$HOSTADDRESS$&comm=\$_HOSTILO_SNMP_COMMUNITY$&id=$(($idx-4))" >> $NagiosIloCfgFile
+		;;
+	   *)
+		;;
+	esac
+
+	echo -e "\tcheck_command $NagiosHpHltStatusHnd!$(($idx+1))" >> $NagiosIloCfgFile
+
+	echo -e	"}\n"				>> $NagiosIloCfgFile
+done
+}
+
+# $1: Host group
+function write_nagios_hostgroup_section() {
+echo -e "define hostgroup {"			>> $NagiosIloCfgFile
+echo -e "\thostgroup_name\t$1"			>> $NagiosIloCfgFile
+echo -e "\tmembers ${IloXmlTag[0]}"		>> $NagiosIloCfgFile
+echo -e "}\n"					>> $NagiosIloCfgFile
+}
+
+# $1: Service Group
+function write_nagios_servicegroup_section () {
+
+for((idx=0;idx<${#HpiloServices[@]};idx++)); do
+	echo -e "define servicegroup {"					>> $NagiosIloCfgFile
+	echo -e "\t$1\t${HpiloServices[$idx]}"				>> $NagiosIloCfgFile
+	echo -e "\tmembers \t${IloXmlTag[0]},${HpiloServices[$idx]}"     >> $NagiosIloCfgFile
+	echo -e "}\n"                                          		>> $NagiosIloCfgFile
+done
+}
+
+function write_nagios_contact_section() {
+for((idx=0;idx<${#contact_name[@]};idx++)); do
+	echo -e "define contact {"                         >> $NagiosIloCfgFile
+	echo -e "\tcontact_name\t${contact_name[$idx]}"           >> $NagiosIloCfgFile
+	echo -e "\talias\t${contact_alias[$idx]}"                          >> $NagiosIloCfgFile
+	echo -e "\temail\t${contact_mail_id[$idx]}"               >> $NagiosIloCfgFile
+	echo -e "\tuse generic-contact"                >> $NagiosIloCfgFile
+	echo -e "}\n"                                   >> $NagiosIloCfgFile
+done
+}
+
+function write_nagios_contact_group_section() {
+	echo -e "define contactgroup {"                         >> $NagiosIloCfgFile
+	echo -e "\tcontactgroup_name $contact_grp_name"           >> $NagiosIloCfgFile
+	echo -e "\talias $contact_grp_alias"                          >> $NagiosIloCfgFile
+	for((idx=0;idx<${#contact_name[@]};idx++)); do
+        	if [ "$idx" -eq "0" ]; then
+               		memberContacts=${contact_name[$idx]}
+        	else
+                	memberContacts="$memberContacts,${contact_name[$idx]}"
+        	fi
+	done
+	echo -e "\tmembers $memberContacts"               >> $NagiosIloCfgFile
+	echo -e "}\n"                                   >> $NagiosIloCfgFile
+}
+
+
+# $1: IP address
+function check_ilo_device() {
+local	has_IP_configured=
+local   has_UUID=
+local	UUID_str=
+
+
+get_xml_content $1
+
+# Check if the device is BMC (HPE iLO)
+if [[ ${IloXmlTag[1]} != *iLO* ]]; then
+	write_log "The host '$1' is not a HPE iLO device"
+	return 1
+fi
+
+if [[ ${IloXmlTag[0]} != *ProLiant* ]]; then
+	write_log "The host '$1' is not a HPE ProLiant server"
+	return 1
+fi
+# Check if device is Gen8 and above 
+if [[ ${IloXmlTag[0]} != *Gen* ]]; then
+	write_log "The host '$1' is not supported server"
+	return 1
+fi
+
+write_log "The product string of the IP '$1' is '${IloXmlTag[0]}'."
+
+write_log "Nagios config file $NagiosIloCfgFile"
+has_IP_configured=$(search_string $NagiosIloCfgFile "$1")
+
+UUID_str=${IloXmlTag[2]}
+if [ "$UUID_str" != "000" ]; then
+	has_UUID=$(search_string $NagiosIloCfgFile "$UUID_str")
+	if [ "x$has_UUID" != "x" ]; then
+		ip_line=`grep -n -B 1 "$has_UUID" $NagiosIloCfgFile | grep "address" | head -n 1`
+		s_ip=`echo $ip_line |awk -F ' ' '{print $3}'`
+		if [ "$1" = "$s_ip" ]; then
+			write_log "The IP '$1' has been configured"
+			return 1
+		else
+			#update the new IP address
+			write_log "The IP $1 has changed to IP $s_ip"
+			ip_line=`echo $ip_line |awk -F '-' '{print $1}'`
+			sed -i "${ip_line}s/$s_ip/$1/" $NagiosIloCfgFile
+			return 1
+		fi
+
+	fi
+elif [ "x${has_IP_configured}" != "x" ]; then
+	write_log "The IP '$1' has been configured"
+	return 1
+fi
+
+return 0
+}
+
+# $1: IP address		
+function write_nagios_cfg_file() {
+local	found_host_group="False"
+local	dup_prefix_hostname=
+local	host_group=
+local	s_line=	# start line
+local	services_configured=
+local	command_configured=
+local	num_srvs_exist=
+local	idx=0
+
+# Semaphore
+ lockfileCMD=`which lockfile 2>/dev/null`
+
+if [ $? -eq 0 ]; then
+        $lockfileCMD $LockFile
+
+        if [ $? -ne 0 ]; then
+                write_log "ERROR: Can not get the semaphore file (lock file)"
+        fi
+fi
+
+
+# Find the number of existed servers in NagiosIloCfgFile
+num_srvs_exist=`echo -e "$(search_string $NagiosIloCfgFile "${IloXmlTag[0]}")" | grep "host_name" | wc -l `
+
+IloXmlTag[0]=${IloXmlTag[0]}-$(($num_srvs_exist+1))
+
+
+# Read the configured host groups from the configuration file
+#if [ "x${HostGroupCfgFile}" != "x" ]; then
+#	if [ -f $HostGroupCfgFile ] && [ ${#HostGroup[@]} -eq 0 ]; then
+#	read_host_group
+#	echo "Read file"
+
+#	fi
+#fi
+
+for((idx=0;idx<${#HostGroup[@]};idx++)); do
+	#found_host_group=$(is_host_in_ip_range $1 "${IPAddrGroup[$idx]}")
+	found_host_group=$(is_host_in_ip_range $1 "${HostGroupIPAddr[$idx]}")
+	if [ "$found_host_group" = "True" ]; then
+		break;
+	fi
+done
+
+if [ "$found_host_group" = "True" ]; then
+	host_group=${HostGroup[$idx]}
+	host_read_community=${HostGroup_ReadCommStr[$idx]}
+	host_community_str=${HostGroupCommunityStr[$idx]}
+else
+	host_group=$HpiloHostgroup
+	host_read_community=$HpiloSnmpComm
+fi
+
+write_log "The server '${IloXmlTag[0]}' with IP address '$1' is added"
+if [ "x$(cat $NagiosIloCfgFile | grep -w "name generic-iLO-host")" = "x" ]; then
+	write_nagios_generic_host_section
+	write_nagios_genric_service_section
+fi
+write_nagios_host_section $1 $host_read_community
+
+if [ "x$(cat $NagiosIloCfgFile | grep "$host_group")" = "x" ]; then
+	# The specific host group is not created yet. 
+	# Just create a new one.
+	write_nagios_hostgroup_section "$host_group"
+else
+	# Find the starting line number for the specific host group
+	s_line=`grep -n -B 1 "$host_group" $NagiosIloCfgFile  | grep "define hostgroup" | head -n 1 | awk -F '-' '{print $1}'`
+
+	s_line=$(($s_line+2))
+
+	# append string
+	sed -i "$s_line s/\$/, ${IloXmlTag[0]}/" $NagiosIloCfgFile
+fi
+
+#Find the specific service group
+if [ "x$(cat $NagiosIloCfgFile | grep "$HpiloServiceGroup")" = "x" ]; then
+	#The specific service group is not created yet.
+	write_nagios_servicegroup_section "$HpiloServiceGroup" 
+else 
+	#Add host to specific service group
+
+	for((id=0;id<${#HpiloServices[@]};id++)); do
+		s_line=`grep -n "servicegroup_name" $NagiosIloCfgFile  | grep "${HpiloServices[$id]}" |  head -n 1 | awk -F ':' '{print $1}'`
+		s_line=$(($s_line+1))
+		sed -i "$s_line s/\$/, ${IloXmlTag[0]},${HpiloServices[$id]}/" $NagiosIloCfgFile
+	done
+fi
+
+services_configured=`grep -c -w "service_description" $NagiosIloCfgFile`
+if [ $services_configured -ne 8 ]; then
+	write_nagios_services_section "$host_group"
+else
+	local ishost_group_exist=""
+	for((idx=0;idx<${#HpiloServices[@]};idx++)); do
+		s_line=`grep -n "service_description *${HpiloServices[$idx]}" $NagiosIloCfgFile  | head -n 1 | awk -F ':' '{print $1}'`
+		s_line=$(($s_line-1))
+		ishost_group_exist=`grep -B 1 "service_description *${HpiloServices[$idx]}" $NagiosIloCfgFile  | grep $host_group|wc -l`
+		if [ $ishost_group_exist -eq 0  ]; then
+			sed -i "$s_line s/\$/, $host_group/" $NagiosIloCfgFile
+		fi
+	done
+
+fi
+
+command_configured=$(search_string $NagiosIloCfgFile "command_name")
+
+if [ "x${command_configured}" = "x" ]; then
+	write_nagios_command_section
+fi
+
+contact_configured=$(search_string $NagiosIloCfgFile "contact_name")
+
+if [ "x${contact_configured}" = "x" ]; then
+	if [ "x${contact_name}" != "x" ]; then		
+		write_nagios_contact_section
+	fi
+fi
+
+contactgrp_configured=$(search_string $NagiosIloCfgFile "contactgroup_name")
+
+if [ "x${contactgrp_configured}" = "x" ]; then
+	if [ "x${contact_grp_name}" != "x" ]; then
+        	write_nagios_contact_group_section
+	fi
+fi
+
+rm -f $LockFile
+}
+
+#$1: mode number
+function check_mode() {
+local	flag=0
+local	idx=0
+
+# Check if the mode is valid
+for((idx=0;idx<${#DiscModes[@]};idx++)); do
+
+	# The valid mode ?
+	if [ "$1" = "${DiscModes[$idx]}" ]; then
+		flag=1
+		break
+	fi
+
+done
+
+if [ $flag -eq 0 ] ; then
+	echo -ne "Error: The mode number should be "
+
+	for((idx=0;idx<${#DiscModes[@]};idx++)); do
+		echo -ne "${DiscModes[$idx]} "
+	done
+
+	echo -ne "\n"
+
+	exit 1
+fi
+}
+
+# $1: IP address of the network interface
+# $2: Network mask of the network interface or second ip address in case of ip range formate
+# $3: type of address formate , x.x.x.x or x.x.x.x/yy or x.x.x.x-y.y.y.y
+function get_formatted_addr_range() {
+local	addr=
+local	mask=
+local	addr_head=
+local	addr_tail=
+local	addr_range=
+local	idx=0
+case $3 in
+	0)
+	for((idx=0;idx<${IPV4AddrEntries};idx++)); do
+		# Retrieve each entry of IP address.
+		# For example:
+		#   IP Address is A.B.C.D -> Get A, B, C and D
+		addr=`echo $1 | cut -d '.' -f $(($idx+1))`
+		mask=`echo $2 | cut -d '.' -f $(($idx+1))`
+
+		# Caculate the IP address range
+		addr_head=$(($addr & $mask))
+		addr_tail=$(($addr_head + 255 - $mask))
+
+		# Convert to the range format
+		addr_range[$idx]=`echo $addr_head..$addr_tail`
+	done
+	ranges[$g_range_idx]=`echo "{${addr_range[0]}}.{${addr_range[1]}}.{${addr_range[2]}}.{${addr_range[3]}}"`
+	g_range_idx=$(($g_range_idx+1))
+	;;
+
+	1)
+	local OIFS=$IFS
+	IFS='.'
+	ip1=($1)
+	ip2=($2)
+	IFS=$OIFS
+	for((idx=0;idx<${IPV4AddrEntries};idx++)); do
+		octet[$idx]=`echo "{${ip1[$idx]}..${ip2[$idx]}}"`
+	done
+	octet3[0]=${ip1[3]}
+	octet3[1]=${ip2[3]}
+
+	for f in $(eval echo ${octet[0]}); do
+		for s in $(eval echo ${octet[1]}); do
+			for t in $(eval echo ${octet[2]}); do
+				for i in ${octet3[@]}; do
+					if [ ${ip1[2]} -eq $t ] && [ ${ip2[2]} -eq $t ]; then
+						ranges[$g_range_idx]=`echo "{$f..$f}.{$s..$s}.{$t..$t}.{${ip1[3]}-${ip2[3]}}"`
+						g_range_idx=$(($g_range_idx+1))
+						break;
+					elif [ ${ip1[2]} -eq $t ] && [ ${ip1[3]} -eq $i ]; then
+						ranges[$g_range_idx]=`echo "{$f..$f}.{$s..$s}.{$t..$t}.{$i-255}"`
+						g_range_idx=$(($g_range_idx+1))
+					elif [ ${ip2[2]} -eq $t ] && [ ${ip2[3]} -eq $i ]; then
+						ranges[$g_range_idx]=`echo "{$f..$f}.{$s..$s}.{$t..$t}.{0-$i}"`
+						g_range_idx=$(($g_range_idx+1))
+					elif [ ${ip2[2]} -ne $t ] && [ ${ip1[2]} -ne $t ]; then
+						ranges[$g_range_idx]=`echo "{$f..$f}.{$s..$s}.{$t..$t}.{0-255}"`
+						g_range_idx=$(($g_range_idx+1))
+					fi
+				done
+			done
+		done
+	done
+	;;
+
+	2)
+	local OIFS=$IFS
+	IFS='.'
+	ip1=($1)
+	ip2=($2)
+	IFS=$OIFS
+	for((idx=0;idx<${IPV4AddrEntries};idx++)); do
+		if [ $idx -eq 3 ]; then
+			addr_range[$idx]=`echo ${ip1[$idx]}-${ip2[$idx]}`
+		else
+			addr_range[$idx]=`echo ${ip1[$idx]}..${ip2[$idx]}`
+		fi
+
+	done
+	ranges[$g_range_idx]=`echo "{${addr_range[0]}}.{${addr_range[1]}}.{${addr_range[2]}}.{${addr_range[3]}}"`
+	g_range_idx=$(($g_range_idx+1))
+	;;
+	*)
+	;;
+esac
+
+}
+
+# $1: IP address range. 
+#       The parameter "$1" should be {16..16}.{153..153}.{112..113}.{0..255} 
+#	The output will be 16.135.112.0-16.153.113.255
+function get_readable_addr_range() {
+local	entries=0
+local	head=
+local	tail=
+local	idx=
+local addr=("$@")
+local rangeToDis=`echo ${addr[@]} |  sed 's/\-/../g'`
+for i in ${rangeToDis[@]}; do
+	local   IFS="{}"
+	for idx in $i; do
+
+		# Check if the substring is something like this: x..y
+		echo $idx | grep '\.\.' > /dev/null
+
+		# Yes, the substring contains x..y.
+		if [ $? -eq 0 ]; then
+			# Get the range field. For example, 16..16, 153..153, 
+			#112..113, and 0..255
+			head[$entries]=`echo $idx | awk -F '\\\.\\\.' '{print $1}'`
+			tail[$entries]=`echo $idx | awk -F '\\\.\\\.' '{print $2}'`
+
+			entries=$(($entries+1))
+		fi
+	done
+
+	IFS="."
+	#echo "${head[*]}-${tail[*]}"
+	printf "%s-%s  " "${head[*]}" "${tail[*]}"
+	entries=0
+done
+}
+
+# $1: The network interface
+function check_net_interface() {
+
+local temp=("$@")
+local flag="false"
+local entries=
+local NetAddr=
+local NetMask=
+if [ "x$1" = "x" ]; then
+	echo "ERROR: You need to specify the network interface when the active mode is enabled"
+	exit 1
+fi
+
+for i in ${temp[@]}; do
+
+	`/sbin/ifconfig $i > /dev/null 2>&1`
+	if [ $? -ne 0 ]; then
+		echo "Please make sure the network interface '$i' is availabe in your host"
+		#continue
+		exit 1 
+	fi
+
+	NetAddr=`ifconfig $i | grep "inet addr" | cut -d ':' -f2 | cut -d ' ' -f1`
+
+	if [ "x${NetAddr}" != "x" ]; then
+		NetMask=`ifconfig $i | grep "Mask" | cut -d ':' -f4`
+	else
+		echo "Please make sure the network interface '$i' is configured with a valid IP address"
+		#continue
+		exit 1 
+	fi
+
+
+	if [ "x${NetMask}" = "x" ]; then
+		echo "Please make sure the network interface '$i' is configured with a valid IP address"
+		#continue
+		exit 1 
+	fi
+	entries=${#IfNetAddr[@]}
+	IfNetAddr[$entries]=$NetAddr
+	IfNetMask[$entries]=$NetMask
+	flag="true"
+	#write_log "The network interface '$1' has the IP address '$IfNetAddr' and the netmask '$IfNetMask'"
+	echo "The network interface '$i' has the IP address '${IfNetAddr[$entries]}' and the netmask '${IfNetMask[$entries]}'"
+done
+}
+#getIP_from_Subnet
+#$1 -- IP address 192.10.10.2
+#$2 -- subnet mask  255.255.255.128
+#out -- 192.10.10.127
+function getIP_from_Subnet ()
+{
+	IFS=. read -r n1 n2 n3 n4 <<< "255.255.255.255"
+	IFS=. read -r i1 i2 i3 i4 <<< "$1"
+	IFS=. read -r m1 m2 m3 m4 <<< "$2"
+	printf "%d.%d.%d.%d\n" "$(( ( n1 ^ m1 ) ^ i1 ))" "$(( ( n2 ^ m2 ) ^ i2 ))" "$(( ( n3 ^ m3 ) ^ i3 ))" "$(( ( n4 ^ m4 ) ^ i4 ))"
+}
+
+#subnetmask	
+#Ex: 255.255.255.0 or 255.255.0.0
+function getSubnetMask()
+{
+	local i
+	local subnetmask=""
+	local full_octets=$(($1/8))
+	local partial_octet=$(($1%8))
+	for ((i=0;i<4;i+=1)); do
+		if [ $i -lt $full_octets ]; then
+			subnetmask+=255
+		elif [ $i -eq $full_octets ]; then
+			subnetmask+=$((256 - 2**(8-$partial_octet)))
+		else
+			subnetmask+=0
+		fi
+		[ $i -lt 3 ] && subnetmask+=.
+	done
+
+	echo $subnetmask
+}
+
+#Discover subnetwork IP ranges
+function scan_network() {
+local	num_hosts=0
+local	num_hosts_alive=0
+local	num_hosts_scan=0
+num_host_added=0
+local	ranges=
+local	subnet_ranges=
+local	ip_address=
+
+g_range_idx=
+# The expected range is like this: 
+#		{16..16}.{153..153}.{112..113}.{0..255}
+g_range_idx=0
+if [ $useNetInterface -eq 1 ]; then
+	for((idx=0;idx<${#IfNetAddr[@]};idx++)); do
+		get_formatted_addr_range ${IfNetAddr[$idx]} ${IfNetMask[$idx]} 0
+	done
+else
+	#use configured group ip
+	for((idx=0;idx<${#HostGroupIPAddr[@]};idx++)); do
+		local ipAddr1=`echo ${HostGroupIPAddr[$idx]} | awk -F '/' '{print $1}'`
+		local subnet_mask_bits=`echo ${HostGroupIPAddr[$idx]} | awk -F '/' '{print $2}'`
+		local ipAddr2=`echo ${HostGroupIPAddr[$idx]} | awk -F '-' '{print $2}'`
+		if [ "x${subnet_mask_bits}" != "x" ];then
+			local netMask=$(getSubnetMask $subnet_mask_bits)
+			if [ $subnet_mask_bits -le 24 ]; then
+				get_formatted_addr_range $ipAddr1 $netMask 0
+			else
+			 	ipAddr2=$(getIP_from_Subnet $ipAddr1 $netMask)
+				if [ $subnet_mask_bits -eq 31 ] ; then
+					get_formatted_addr_range $ipAddr1 $ipAddr1 1
+				else
+					get_formatted_addr_range $ipAddr1 $ipAddr2 1
+				fi
+			fi
+		elif [ "x${ipAddr2}" != "x" ];then
+			ipAddr1=`echo ${HostGroupIPAddr[$idx]} | awk -F '-' '{print $1}'`
+			get_formatted_addr_range $ipAddr1 $ipAddr2 1
+		else
+			get_formatted_addr_range $ipAddr1 $ipAddr1 2
+		fi
+	done
+fi
+
+#sort and remove duplicate elements
+ranges=($(printf "%s\n" "${ranges[@]}" | sort -u));
+# Get the Class C network address in order to save time during
+# searching the reachable SNMP servers via the command 'nmap'. 
+# The expected range is like this: 
+#		{16..16}.{153..153}.{112..113}.{0..0}
+for((idx=0;idx<${#ranges[@]};idx++)); do
+        subnet_ranges="$subnet_ranges `echo ${ranges[$idx]} | sed -e 's/\..255\}\s*$/..0\}/g'`"
+done
+# Calcluate the number of hosts in this subnet.
+local rangeTocalc=`echo ${ranges[@]} |  sed 's/\-/../g'`
+for ip_address in $(eval echo $rangeTocalc);do
+	num_hosts=$(($num_hosts+1))
+done
+
+echo -e "Scan the network range: $(get_readable_addr_range ${ranges[@]}) with the total hosts '$num_hosts'"
+# Update process: 0%
+#update_active_disc_progress "$num_hosts_scan" "$num_hosts"
+# Get available SNMP-aware servers
+for subnet in $(eval echo $subnet_ranges);do
+
+	#############################################################
+	# In order to save a number of time to find the 
+	# reachable SNMP-aware servers, the Class C network (256 hosts)
+	# is used to perform the 'nmap' utility even though the 
+	# scanned is under Class A/B network.
+	#
+	# For example: 
+	#	Network address: 172.16.0.0 netmask: 255.255.0.0.
+	#	The process searches the network address like this:
+	#		172.16.0.0/24
+	#		172.16.1.0/24
+	#		172.16.2.0/24
+	#		.............
+	#		.............
+	#		172.16.255.0/24
+	#############################################################
+	if [ "x$(echo $subnet | grep -)" != "x" ]; then
+		subnet=`echo "$subnet" | sed 's/{//g'| sed 's/}//g'`
+	else
+		subnet=`echo $subnet/24`
+	fi
+	write_log "Search online hosts from network $subnet"
+#	echo "Search online hosts from network $subnet"
+	update_active_disc_progress "$num_hosts_scan" "$num_hosts"
+	# Search hosts under the specific network
+	$NmapBin -sU -p $SnmpPort  $subnet > $NmapLogFile 2>/dev/null
+
+	# Get the number of online hosts
+	num_hosts_alive=`grep "hosts\? up" $NmapLogFile  | cut -d '(' -f2 | cut -d ')' -f1 | cut -d ' ' -f1`
+	num_hosts_scan=`grep "Nmap done" $NmapLogFile | cut -d ' ' -f 3`
+	parse_nmap_report $(($num_hosts_scan-$num_hosts_alive)) $num_hosts
+
+done
+echo -e "\nTotal hosts '$num_host_added' added of '$num_hosts' hosts"
+# Remove nmap log file
+rm -f $NmapLogFile
+}
+
+#nagios config file path
+function get_nagios_cfg_path() {
+local	nagios_cfg=
+
+# The format might be like: 
+#	1)  NagiosIloCfgFile=${prefix}/etc/nagios.cfg
+#	2)  NAGIOSCFG="/etc/nagios3/nagios.cfg"
+nagios_cfg=`grep -E "=.*etc.*nagios.cfg" /etc/init.d/nagios* | \
+cut -d '=' -f 2`
+
+# trim double quotes
+nagios_cfg=`echo $nagios_cfg | tr -d '"'`
+
+if [[ $nagios_cfg = *prefix* ]]; then
+	# The /etc/init.d/nagios* has the format like this:
+	# 	NagiosIloCfgFile=${prefix}/etc/nagios.cfg
+	# So, we need to replace ${prefix} with the actual value
+
+	# Find the nagios prefix path
+	local nagios_prefix=`grep -i "^prefix=" /etc/init.d/nagios* | \
+	cut -d '=' -f 2`
+
+	# ${prefix}/etc/nagios.cfg -> will be etc/nagios.cfg
+	local nagios_suffix=`echo $nagios_cfg | cut -d '/' -f 2-`
+
+	nagios_cfg="${nagios_prefix}/$nagios_suffix"
+	nagios_cfg=`echo $nagios_cfg | sed -r  's/\/\//\//g'`
+	write_log "nagios_cfg : ${nagios_prefix}/$nagios_suffix"
+	
+fi
+
+local nagios_path=`dirname $nagios_cfg`
+
+#check hpeilo folder in nagios installation directory
+if [ -d "$NAGIOS_ILO_PLUGINS_PATH/hpeilo" ]; then
+	#move hepilo folder to nagios share directory
+	update_nagios_url_path $nagios_path
+fi
+
+local nagios_cfg_dir=`grep "^cfg_dir=$nagios_path" $nagios_cfg | \
+tail -n 1 | cut -d '=' -f 2`
+write_log "nagios_cfg_dir : $nagios_cfg_dir"
+# No iLO configuration for the cfg_dir statement? -> Add a new one
+if [[ "x${nagios_cfg_dir}" = "x" ]] || [[ "${nagios_path}/ilo" != "${nagios_cfg_dir}" ]]; then
+	# create a folder if the folder does not exist. 
+	[ -d $nagios_path/ilo ] || mkdir $nagios_path/ilo
+
+	local line_number=`grep -n "^#cfg_dir=" \
+	$nagios_cfg  | tail -n 1 | cut -d ':' -f 1`
+	#If line number is empty, append the cfg_dir ilo path to EOF.
+	if [ "x${line_number}" = "x" ]; then
+		line_number=`wc -l $nagios_cfg | cut -d ' ' -f1`
+	fi
+
+	# append a cfg_dir statement
+	sed -e "$line_number a cfg_dir=$nagios_path/ilo" $nagios_cfg \
+	> $TmpFile
+	nagios_cfg_dir="$nagios_path/ilo"							
+	mv $TmpFile $nagios_cfg
+
+fi
+NagiosIloCfgFile="$nagios_path/ilo/ilo.cfg"
+write_log "NagiosIloCfgFile : $NagiosIloCfgFile"
+#if file not exist ,create one and add generic templates.
+if [ ! -f $NagiosIloCfgFile ]; then
+	touch $NagiosIloCfgFile
+else
+	#if "overwrite flag" is set then move ilo.cfg file
+	#to "backup" directory with date appended to it.
+        if [ "$overwri_ilocfg" = "1" ]; then
+		local iLO_cfg_path=`dirname $NagiosIloCfgFile`
+		local iLO_cfg_backup_dir=".backup"
+		# create a folder inside the ilo directory for back up of config files. 
+		if [ ! -d $iLO_cfg_path/$iLO_cfg_backup_dir ]; then
+			mkdir $iLO_cfg_path/$iLO_cfg_backup_dir
+			#echo "$iLO_cfg_path/$iLO_cfg_backup_dir directory created"
+		fi
+        	if [ -f $NagiosIloCfgFile ]; then
+			now=$(date +"%Y-%m-%d-%S")	#year-month-day-seconds
+			filename=$now-ilo.cfg		#2015-01-23-10-ilo.cfg
+			mv $NagiosIloCfgFile $iLO_cfg_path/$iLO_cfg_backup_dir/$filename
+        	fi
+		touch $NagiosIloCfgFile
+        fi
+fi
+
+# Get the name of the nagios service: nagios or nagios3
+NagiosService=`find /etc/init.d/ -name "nagios*"  | xargs basename`
+}
+
+function update_nagios_url_path() {
+local nagios_share=
+
+if [ -f "$1/cgi.cfg" ]; then
+	nagios_share=`cat $1/cgi.cfg | grep -i "physical_html_path=" | cut -d '=' -f 2`
+	if [ -d "$nagios_share/hpeilo" ]; then
+		`rm -rf $nagios_share/hpeilo`
+	fi
+	`cp $NAGIOS_ILO_PLUGINS_PATH/hpeilo $nagios_share -rf`
+fi
+}	
+
+# Start here
+if [[ $EUID -ne 0 ]]; then
+	echo "Please run this script with the root user" 
+	exit 1
+fi
+
+# No argument
+if [ $# -eq 0 ]; then
+	usage 
+	exit 1
+fi
+
+# verbose mode: write the log to the variable HpiloLogFile 
+VerboseMode=0
+
+# parse the arguments
+while [ "x$1" != "x" ]; do
+	option=$1
+
+	case $option in
+		-m)
+
+		# Get the mode
+		shift
+
+		mode=$1
+		;;
+
+		-i)
+		# Get the name of the network interface
+		cfg_interface=1
+		shift
+
+		# Check if the name of the network interface is
+		# vaild. 
+		if [ "x$1" = "x" ] ; then
+			usage
+			exit 1
+		fi
+
+		IfName[0]=$1
+		;;
+
+		-s)
+		# Get the host group configure file
+		cfg_file=1
+		shift
+
+		# Check if the host group configuration file is 
+		# vaild. 
+		if [ "x$1" = "x" ] ; then
+			usage
+			exit 1
+		fi
+
+		HostGroupCfgFile=`/bin/readlink -f $1`
+		;;
+
+ 		-o)
+                #Overwrite the discovered hosts/services ilo configuration file
+                overwri_ilocfg=1
+                ;;
+
+		-h | --help)
+		usage
+		print_help
+		exit 1
+		;;
+		-v)
+		# enable verbose mode
+		VerboseMode=1
+		;;
+		*)
+		echo "ERROR: unknown option $option"
+		usage
+		exit 1
+		;;
+
+	esac
+	shift
+done
+
+#Discover up and running servers.
+ActiveDiscMode()
+{
+	NumHostsProcessed=0
+	useNetInterface=0
+
+	NmapBin=`which nmap 2>/dev/null`
+
+	if [ $? -ne 0 ]; then
+		echo "[Error]: Cannot find nmap utility. You need to install nmap with the version >= $NmapMinVersion"
+		exit 1
+	fi
+
+	CurlBin=`which curl 2>/dev/null`
+
+        if [ $? -ne 0 ]; then
+                echo "[Error]: Cannot find curl utility. You need to install curl"
+                exit 1
+        fi
+	check_nmap_version "$NmapBin"	
+	if [ ${#IfName[@]} -ne 0 ]; then
+		useNetInterface=1
+		check_net_interface ${IfName[@]}
+	elif [ "x${HostGroupCfgFile}" = "x" ]; then
+		usage
+	fi
+
+	scan_network
+
+
+
+}
+
+#remove lock file if exist 
+#fix QXCR1001454803 -- [NIAP] nagios daemon start error since redundant host find can't be configured
+#rm -f $LockFile
+
+# Check the discovery mode
+check_mode $mode
+
+#nagios config path
+get_nagios_cfg_path
+
+# Read the configured host groups from the configuration file
+if [ "x${HostGroupCfgFile}" != "x" ]; then
+	if [ -f $HostGroupCfgFile ]; then
+		read_config_file
+	else
+		echo "ERROR: Configuration file '$HostGroupCfgFile' not exist."
+		exit 1
+	fi
+
+fi
+
+
+case $mode in
+	$ActiveDisc)
+	if ([ $cfg_file -eq 1 ] || [ $cfg_interface -eq 1 ]) && [ $mode -eq 1 ]; then
+	ActiveDiscMode
+	echo 
+	else	
+		usage
+		exit 1
+	fi
+	;;
+	$PassiveDisc)
+	
+	read IloIP 
+	read protocol
+
+	# Get the IP from the protocol info if the IloIP variable 
+	# is <UNKNOWN>.
+	# 	Example for the protocol variable:
+	#		UDP: [16.153.112.187]:58240->[16.153.113.255]
+	IloIP=`echo $protocol | cut -d '[' -f 2 | cut -d ']' -f 1`
+
+	check_ilo_device $IloIP
+
+	if [ $? -eq 0 ]; then
+
+		write_nagios_cfg_file $IloIP
+
+		# reload nagios configuration files
+		`service $NagiosService reload > /dev/null`
+	fi
+	exit 0
+
+	;;
+	$ConfigDisc)
+	if [ $cfg_file -eq 1 ] && [ $mode -eq 3 ]; then
+	echo "Discovery using configuration file"
+	if [ $passive_disc = 1 ]; then
+		echo "passive configuration enabled"
+		#configure snmptrapd file
+		snmptrapd_config
+	else
+		#remove if it's disabled
+                echo "passive configuration disabled"
+                remove_traphandle
+                restart_snmptrapd
+	fi
+
+	if [ $active_disc = 1 ]; then
+		echo "active configuration enabled"
+		ActiveDiscMode
+	fi
+	else
+		usage
+		exit 1
+	fi
+
+	;;
+	*)
+	echo "ERROR: unknown mode '$mode'"
+	exit 1
+esac
+
+# Remove the temporary file
+rm -f $HpiloXmlFile
+rm -f $TmpFile

@@ -1,0 +1,366 @@
+#!/bin/bash
+#
+#  nagios_hpeilo_traps -- The script aims to collect the SNMP traps 
+#			 received from HP ProLiant Server and to 
+#			 update the corresponding status in real-time
+#	        
+#  (C) Copyright [2015] Hewlett-Packard Enterprise Development Company, L.P.
+#
+#  This program is free software; you can redistribute it and/or modify 
+#  it under the terms of version 2 of the GNU General Public License as 
+#  published by the Free Software Foundation.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+#
+#  See the GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License 
+#  along with this program; if not, write to:
+#   Free Software Foundation, Inc.
+#   51 Franklin Street, Fifth Floor
+#   Boston, MA 02110-1301, USA.  
+#
+#   Written by Adrian Huang <adrian.huang@hp.com>.
+
+prefix=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+NagiosLibexec="${prefix}"
+NagiosHpiloEngine="nagios_hpeilo_engine"
+
+HpiloLogFile="/var/log/nagios_hpeilo_traps.log"
+HpiloSnmpComm="public" # hpeilo ilo community string
+HpiloServices=("System Status" "Fans" "Memory" "Network" "Power Supplies" "Processors" "Storage" "Temperatures")
+
+SnmpTrapOid="iso.3.6.1.6.3.1.1.4.1.0"
+
+HlthStatusChgTrap="HlthStuatsChangeTrap"
+
+function get_hlth_service_type () {
+	case $1 in
+		603[5-9] | 6055 ) # Fan Group Trap
+			echo "${HpiloServices[1]}"
+			;;
+		603[0-4] | 604[8-9] | 6050 |  605[4-5] ) # Power Supply Group Trap
+			echo "${HpiloServices[4]}"
+			;;
+		604[0-2] ) # Temperature Group Trap
+			echo "${HpiloServices[7]}"
+			;;
+		602[3-4] ) # Processors Group Trap
+			echo "${HpiloServices[5]}"
+			;;
+		11020 ) # Health Status Array Change Trap
+			echo "$HlthStatusChgTrap"
+			;;
+		*) 
+			echo "None"
+			;;
+	esac
+}
+
+# argument 1 ($1): the iLO IP which generated the trap this time 
+# argument 2 ($2): service type
+# argument 3 ($3): service status (NAGIOS_OK or NAGIOS_WARNING or ...)
+# argument 4 ($4): status information 
+function nagios_passive_check () {
+
+	
+	write_log "PROCESS_SERVICE_CHECK_RESULT;$1;$2;$3;$4" 
+
+	now=$((`date +%s`))
+	printf "[%lu] PROCESS_SERVICE_CHECK_RESULT;$1;$2;$3;$4\n" $now > $NagiosCmdFile
+
+}
+
+# argument 1 ($1): The data to be logged
+function write_log () {
+	if [ "$VerboseMode" = "1" ]
+	then
+		echo -e "[`date "+%b %d %T"`] $1" >> $HpiloLogFile
+	fi
+}
+
+function get_nagios_cfg_file() {
+	local	nagios_cfg=
+
+
+	# The format might be like: 
+	#	1)  NagiosIloCfgFile=${prefix}/etc/nagios.cfg
+	#	2)  NAGIOSCFG="/etc/nagios3/nagios.cfg"
+        nagios_cfg=`grep -E "=.*etc.*nagios.cfg" /etc/init.d/nagios* | \
+			cut -d '=' -f 2`
+
+	# trim double quotes
+	nagios_cfg=`echo $nagios_cfg | tr -d '"'`
+
+	if [[ $nagios_cfg = *prefix* ]]; then
+		# The /etc/init.d/nagios* has the fomrat like this:
+		# 	NagiosIloCfgFile=${prefix}/etc/nagios.cfg
+		# So, we need to replace ${prefix} with the actual value
+
+		# Find the nagios prefix path
+		local nagios_prefix=`grep -i "^prefix=" /etc/init.d/nagios* | \
+				cut -d '=' -f 2`
+
+		# ${prefix}/etc/nagios.cfg -> will be etc/nagios.cfg
+		local nagios_suffix=`echo $nagios_cfg | cut -d '/' -f 2-`
+
+		nagios_cfg="${nagios_prefix}/$nagios_suffix"
+	fi
+
+	echo "$nagios_cfg"
+
+}
+
+function get_nagios_ilo_cfg_path() {
+	local   nagios_cfg=$(get_nagios_cfg_file)
+	local nagios_path=`dirname $nagios_cfg`
+	local NagiosIloCfgFile="$nagios_path/ilo/ilo.cfg"
+	echo $NagiosIloCfgFile
+}
+
+# argument 1 ($1): the iLO IP which generated the trap this time 
+# argument 2 ($2): the iLO IP trap number 
+# argument 3 ($3): service type
+function update_hlth_status () {
+	local nagios_cfg_file=$(get_nagios_cfg_file)
+	local oid_idx=
+	local nagios_service_status=
+
+	write_log "$nagios_cfg_file"
+
+	NagiosCmdFile=`grep -r command_file $nagios_cfg_file | \
+		awk -F = '{print $2}'`
+
+
+	for((idx=0;idx<${#HpiloServices[@]};idx++)) 
+	do
+		if [ "$3" = "${HpiloServices[$idx]}" ]; then
+			oid_idx=$idx
+			break
+		fi
+	done
+		
+	# The oid_idx must be increased by 1 since the oid index of the 
+	# NagiosHpiloEngine is started from 1 rather than 0. 
+	write_log "$NagiosLibexec/$NagiosHpiloEngine -H $IloIP -C $HpiloSnmpComm -o $((oid_idx+1))" 
+	output=`$NagiosLibexec/$NagiosHpiloEngine -H $IloIP -C $HpiloSnmpComm -o $((oid_idx+1))`
+
+	nagios_service_status=$?
+
+	nagios_passive_check "$1" "$3" "$nagios_service_status" "$output"
+		
+
+}
+
+# argument 1 ($1): the iLO IP  
+# argument 2 ($2): the iLO IP  RO community string
+function update_hlth_status_from_status_array () {
+	local nagios_cfg_file=$(get_nagios_cfg_file)
+	local oid_idx=0
+	local curr_oid_idx=$3
+	local curr_oid_idx=$((curr_oid_idx-1))
+	local curr_odi_status=
+	local curr_oid_disc=
+	nagios_service_status=0
+	local hlth_array_count=0
+	write_log "$nagios_cfg_file"
+
+	NagiosCmdFile=`grep -r command_file $nagios_cfg_file | \
+		awk -F = '{print $2}'`
+
+
+	# The oid_idx must be increased by 1 since the oid index of the 
+	# NagiosHpiloEngine is started from 1 rather than 0. 
+	write_log "$NagiosLibexec/$NagiosHpiloEngine -H $1 -C $2 -o $((oid_idx))" 
+	output=`$NagiosLibexec/$NagiosHpiloEngine -H $1 -C $2 -o $((oid_idx))`
+	nagios_service_status=$?
+	write_log "${HpiloServices[0]} nagios_service_status : $nagios_service_status - $output"
+	IFS=';' read -a hlth_status_array <<< "$output"	
+	hlth_array_count=${#hlth_status_array[@]}
+	for ((xy=0;xy<${#HpiloServices[@]};xy++));do
+		service_key=${HpiloServices[$xy]}
+		case $service_key in
+			"System Status") service_index=0 ;;
+			"Fans") service_index=4 ;;
+			"Memory") service_index=3 ;;
+			"Network") service_index=14 ;;
+			"Power Supplies") service_index=6 ;;
+			"Processors") service_index=2 ;;
+			"Storage") service_index=9 ;;
+			"Temperatures") service_index=5 ;;
+			*) ;; 
+		esac
+
+		write_log "hlth_array_count : $hlth_array_count"
+		if [ $hlth_array_count = 1 ]; then
+			status_key=${hlth_status_array[0]}
+			status_value=3
+			write_log "status_key : $status_key"
+		else
+			status_key=${hlth_status_array[$service_index]}
+			case $status_key in
+				"OK") status_value=0 ;;
+				"Degraded") status_value=1 ;; 
+				"Failed") status_value=2 ;;
+				"NA" | "Other") status_value=3 ;;
+				*) ;;
+			esac
+		fi
+
+		if [ "$status_value" == "1" ] || [ "$status_value" == "2" ]; then
+			case "$xy" in
+				[1] | [4] | [6])
+					status_key=`$NagiosLibexec/$NagiosHpiloEngine -H $1 -C $2 -o $((xy+1))`
+					nagios_service_status=$?
+					;;
+				*)
+					;;
+			esac
+		elif [ "$status_value" == "3" ]; then
+			case "$xy" in
+				3)
+					status_key="Other: Probable Cause might be AMS service is not installed or started on host OS"
+				;;
+				4)
+					status_key="Other: Verify status on OA for Power Supplies of blade server" 
+				;;
+				*)
+				;;
+ 			esac
+		fi
+		if [ $curr_oid_idx = $xy ]; then
+			curr_odi_status=$status_value
+			curr_oid_disc="$status_key"
+			continue
+		fi
+		nagios_passive_check "$1" "${HpiloServices[$xy]}" "$status_value" "$status_key"
+		sleep 0.001
+	done
+	output=$curr_oid_disc
+	nagios_service_status=$curr_odi_status
+	write_log "5. $1 ${HpiloServices[0]} $nagios_service_status $output "
+
+}
+
+
+# $1: file name
+# $2: search pattern
+function search_string() {
+local   str=
+
+if [ -f $1 ]; then
+	str=`grep "$2" -A 1 $1`
+fi
+echo $str
+}
+
+#start here
+
+	VerboseMode=0
+	ActiveMode=0
+	
+
+# parse the arguments
+while [ "x$1" != "x" ]; do
+	option=$1
+
+	case $option in
+		-H)
+
+		# Get the Host IP
+		shift
+
+		host_ip=$1
+		;;
+
+		-C)
+		# Get the community string
+		shift
+		comm_str=$1
+
+		;;
+
+		-o)
+		# Get the OID
+		shift
+		oid_id=$1
+
+		;;
+
+		-v)
+		# enable verbose mode
+		VerboseMode=1
+		;;
+		
+		-A)
+		# Active mode: Get Health Status Array and Update to web page 
+		ActiveMode=1
+		;;
+		*)
+		echo "ERROR: unknown option $option"
+		
+		exit 1
+		;;
+
+	esac
+	shift
+done
+
+
+if [ "$ActiveMode" = "0" ]
+then
+
+	read IloIP 
+	read protocol
+
+# Get the iLO trap ID 
+	while read oid val
+	do
+		if [ "$oid" = "$SnmpTrapOid" ]; then
+			# get the iLO trap ID
+			IloTrapNumber=`echo $val | awk -F . '{print $NF}'`
+			break;
+		fi
+	done
+
+
+ServiceType=$(get_hlth_service_type $IloTrapNumber)
+
+write_log "ilo_ip: $IloIP trap_number: $IloTrapNumber, type: $ServiceType"
+
+
+NagiosIloCfgFile=$(get_nagios_ilo_cfg_path)
+has_configured=$(search_string $NagiosIloCfgFile $IloIP)
+if [ "x${has_configured}" != "x" ]; then
+	comm_str_id=`echo $has_configured | awk '{print $3}'`
+	if [ "x${comm_str_id}" != "x" ]; then
+		HpiloSnmpComm=`echo $has_configured | awk '{print $4}'`
+	fi
+fi
+
+
+if [ "$ServiceType" != "None" ]
+then
+
+	if [ "$ServiceType" != "$HlthStatusChgTrap" ]
+	then
+		update_hlth_status $IloIP $IloTrapNumber "$ServiceType" 
+	fi
+
+	# update system health status
+	update_hlth_status $IloIP $IloTrapNumber "${HpiloServices[0]}"
+fi
+else
+
+	write_log "host_ip : $host_ip  comm_str: $comm_str  oid_idx: $oid_id"
+	#if [ "$oid_id" = "1" ]; then
+	write_log "Active Schedule Mode"
+		update_hlth_status_from_status_array $host_ip $comm_str $oid_id
+		printf "$output\n"
+		exit $nagios_service_status
+	#fi
+	
+fi

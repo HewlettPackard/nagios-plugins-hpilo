@@ -2,10 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT(nagios-plugins-hpilo, 1.5.0, Linux_SWdeliverables@groups.ext.hpe.com)
+AC_INIT(nagios-plugins-hpeilo, 1.5.0, Linux_SWdeliverables@groups.ext.hpe.com)
 AC_CONFIG_SRCDIR([src/nagios_hpilo_engine.c])
 AC_CONFIG_HEADERS([config.h])
-AM_INIT_AUTOMAKE(nagios-plugins-hpilo, 1.5.0)
+AM_INIT_AUTOMAKE(nagios-plugins-hpeilo, 1.5.0)
 AC_CONFIG_MACRO_DIR([m4])
 
 m4_include([m4/m4-ax_compare_version.m4])
@@ -49,9 +49,9 @@ AC_CONFIG_FILES([
 	action-url/Makefile 
 	conf.d/Makefile 
 	scripts/Makefile
-	scripts/nagios_hpilo_cfg_generator
-	scripts/nagios_hpilo_traps
-	scripts/hpiLO_nagios_config
+	scripts/nagios_hpeilo_cfg_generator
+	scripts/nagios_hpeilo_traps
+	scripts/hpeilo_nagios_config
 ])
 
 AC_OUTPUT
