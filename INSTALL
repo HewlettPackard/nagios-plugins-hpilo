@@ -15,7 +15,7 @@ Quick Installation
    After executing the following commands:
 	$ ./configure && make && sudo make install
    Four files (nagios_hpilo_engine, nagios_hpilo_cfg_generator, nagios_hpilo_traps
-and hpiLO_nagios_config) will be copied to the default folder 
+and hpeilo_nagios_config) will be copied to the default folder 
 /usr/local/nagios/libexec	 on Rhel/Sles 
 /usr/lib/nagios/plugins		 on Ubuntu
 

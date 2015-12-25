@@ -63,10 +63,10 @@ Go  to the default folder
 /usr/local/nagios/libexec        on Rhel/Sles
 /usr/lib/nagios/plugins          on ubuntu
 
-The hpiLO_nagios_config auto configuration script will generate configuration 
+The hpeilo_nagios_config auto configuration script will generate configuration 
 file and configure nagios hostgroup by scanning network IP range or network subnet.
 
-# ./hpiLO_nagios_config 
+# ./hpeilo_nagios_config 
 
 Uninstallation:
 ---------------
