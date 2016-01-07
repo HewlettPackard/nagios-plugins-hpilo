@@ -10,7 +10,7 @@ function Temp_Table() {
 
 
 	for(var j in json){
-	  if ( j != 0 && json[j].TmpInd !=undefined && json[j].TmpLocale != undefined ) {
+	  if ( json[j].TmpInd !=undefined && json[j].TmpLocale != undefined ) {
 			document.write('<tr><td>' + json[j].TmpInd + '</td><td>' + tempLoc(json[j].TmpLocale)   + '</td><td>' + CheckUndefined(json[j].TmpCelsius) + '</td><td>' + CheckUndefined(json[j].TmpThres) +	'</td><td>' + tempCondition(json[j].TmpCond) + '</td><td>' + tempThresholdType(json[j].TmpThresType) + '</td></tr>' );
 	  }
 	}

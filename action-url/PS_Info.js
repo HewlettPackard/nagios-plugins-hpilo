@@ -14,40 +14,38 @@ function PS_Table() {
 	var json = JSON.parse(jData);
 	
 	for(var j in json){
-	document.write ("<br> </br>");
-	if ( j != 0) {
-			document.write("<table border=3; align='center'>");
-			document.write ('<tr><th>' + "Power Supply Bay" + '</th><td>' +  j + '</td></tr></thead>' );
-			document.write('<tr><th>' + "Status" + '</th><td>' + PresentStat(json[j].Present) + '</td></tr></thead>');
-			document.write('<tr><th>' + "Condition " + '</th><td>' + ConditionStat(json[j].Condition) + '</td></tr></thead>');
-			if ( json[j].Model == undefined || json[j].Model.trim() === "") {
-				document.write('<tr><th>' + "Model" + '</th><td>' + "N/A" + '</td></tr></thead>');
-			}
-			else {
-				document.write('<tr><th>' + "Model" + '</th><td>' + json[j].Model.trim() + '</td></tr></thead>');
-			}
-			if ( json[j].SerialNumber == undefined || json[j].SerialNumber.trim() === "") {
-				document.write('<tr><th>' + "Serial Number" + '</th><td>' + "N/A" +'</td></tr></thead>');
-			}
-			else {
-				document.write('<tr><th>' + "Serial Number" + '</th><td>' + json[j].SerialNumber.trim() +'</td></tr></thead>');
-			}
-			if (json[j].SparePartNum == undefined ||  json[j].SparePartNum.trim() == "") {
-				document.write('<tr><th>' + "Spare Part Number" + '</th><td>' + "N/A" + '</td></tr></thead>');
-			}
-			else {
-				document.write('<tr><th>' + "Spare Part Number" + '</th><td>' + json[j].SparePartNum.trim() + '</td></tr></thead>');
-			}
-			document.write('<tr><th>' + "Main Voltage" + '</th><td>' + CheckUndefined(json[j].MainVoltage) + " volts" + '</td></tr></thead>');
-			document.write('<tr><th>' + "Maximum Capacity" + '</th><td>' + CheckUndefined(json[j].CapacityMaximum) +" watts" +'</td></tr></thead>');			
-			if (json[j].FirmwareRev == undefined ||  json[j].FirmwareRev.trim() == "") {
-				document.write('<tr><th>' + "Firmware Revision" + '</th><td>' + "N/A" +'</td></tr></thead>');
-			}
-			else {
-				document.write('<tr><th>' + "Firmware Revision" + '</th><td>' + json[j].FirmwareRev.trim() +  '</td></tr></thead>');
-			}
-			document.write("</table>");
-	}
+		document.write ("<br> </br>");
+		document.write("<table border=3; align='center'>");
+		document.write ('<tr><th>' + "Power Supply Bay" + '</th><td>' +  j + '</td></tr></thead>' );
+		document.write('<tr><th>' + "Status" + '</th><td>' + PresentStat(json[j].Present) + '</td></tr></thead>');
+		document.write('<tr><th>' + "Condition " + '</th><td>' + ConditionStat(json[j].Condition) + '</td></tr></thead>');
+		if ( json[j].Model == undefined || json[j].Model.trim() === "") {
+			document.write('<tr><th>' + "Model" + '</th><td>' + "N/A" + '</td></tr></thead>');
+		}
+		else {
+			document.write('<tr><th>' + "Model" + '</th><td>' + json[j].Model.trim() + '</td></tr></thead>');
+		}
+		if ( json[j].SerialNumber == undefined || json[j].SerialNumber.trim() === "") {
+			document.write('<tr><th>' + "Serial Number" + '</th><td>' + "N/A" +'</td></tr></thead>');
+		}
+		else {
+			document.write('<tr><th>' + "Serial Number" + '</th><td>' + json[j].SerialNumber.trim() +'</td></tr></thead>');
+		}
+		if (json[j].SparePartNum == undefined ||  json[j].SparePartNum.trim() == "") {
+			document.write('<tr><th>' + "Spare Part Number" + '</th><td>' + "N/A" + '</td></tr></thead>');
+		}
+		else {
+			document.write('<tr><th>' + "Spare Part Number" + '</th><td>' + json[j].SparePartNum.trim() + '</td></tr></thead>');
+		}
+		document.write('<tr><th>' + "Main Voltage" + '</th><td>' + CheckUndefined(json[j].MainVoltage) + " volts" + '</td></tr></thead>');
+		document.write('<tr><th>' + "Maximum Capacity" + '</th><td>' + CheckUndefined(json[j].CapacityMaximum) +" watts" +'</td></tr></thead>');			
+		if (json[j].FirmwareRev == undefined ||  json[j].FirmwareRev.trim() == "") {
+			document.write('<tr><th>' + "Firmware Revision" + '</th><td>' + "N/A" +'</td></tr></thead>');
+		}
+		else {
+			document.write('<tr><th>' + "Firmware Revision" + '</th><td>' + json[j].FirmwareRev.trim() +  '</td></tr></thead>');
+		}
+		document.write("</table>");
 	}
 	document.write ("<br> </br>");
 

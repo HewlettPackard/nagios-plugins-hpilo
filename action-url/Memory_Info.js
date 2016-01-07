@@ -10,7 +10,7 @@ function Memory_Table() {
 
 
 	for(var j in json){
-	  if ( j != 0 && json[j].Mem2BoardCpuNum !=undefined ) {
+	  if ( json[j].Mem2BoardCpuNum !=undefined ) {
 		document.write('<tr><td>' + "CPU " + json[j].Mem2BoardCpuNum + '</td><td>' + MemErrStat(json[j].Mem2BoardErrorStat)   + '</td><td>' + MemPresentStat(json[j].Mem2BoardOnlineStat) + '</td><td>' + MemLock(json[j].Mem2BoardLocked) +	'</td><td>' + MemHotplug(json[j].Mem2BoardHotPlug) + '</td><td>' + CheckUndefinedMem(json[j].Mem2BoardTotalMemSize) + '</td><td>' +  CheckUndefinedMem(json[j].Mem2BoardOsMemSize) + '</td><td>' +  MemOpFreq(json[j].Mem2BoardOper_Freq) + '</td><td>' +  MemVolts(json[j].Mem2BoardOper_Volt) + '</td></tr>' );
 		}
 	}

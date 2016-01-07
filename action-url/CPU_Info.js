@@ -15,7 +15,7 @@ function CPU_Table() {
 	
 	for(var j in json){
 	document.write ("<br> </br>");
-	if ( j != 0 && json[j].CpuSocketNum !=undefined ) {
+	if ( json[j].CpuSocketNum !=undefined ) {
 			document.write("<table border=3; align='center'>");
 			document.write ('<tr><th>' + "Socket Number" + '</th><td>' +  CheckUndefined(json[j].CpuSocketNum) + '</td></tr></thead>' );
 			document.write ('<tr><th>' + "Cores" + '</th><td>' +  CheckUndefinedCPU(json[j].CpuCore) + '</td></tr></thead>' );
