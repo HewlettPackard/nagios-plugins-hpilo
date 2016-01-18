@@ -14,34 +14,32 @@ function Storage_Table() {
 	var json = JSON.parse(jData);
 	
 	for(var j in json){
-	document.write ("<br> </br>");
-	if ( j != 0) {
-			document.write("<table border=3; align='center'>");
-			document.write ('<tr><th>' + "Model" + '</th><td>' +  CntlrModel(json[j].st_Model) + '</td></tr></thead>' );
-			if ( json[j].st_FWRev == undefined || json[j].st_FWRev.trim() === "") {
-				document.write('<tr><th>' + "Firmware version" + '</th><td>' + "N/A" + '</td></tr></thead>');
-			}
-			else {
-				document.write('<tr><th>' + "Firmware version" + '</th><td>' + json[j].st_FWRev.trim() + '</td></tr></thead>');
-			}
-			document.write('<tr><th>' + "Controller Condition " + '</th><td>' + ConditionStat(json[j].st_Cond) + '</td></tr></thead>');
-			if (json[j].st_Prod_Rev == undefined || json[j].st_Prod_Rev.trim() == "") {
-					document.write('<tr><th>' + "Product Revision" + '</th><td>' + "N/A" + '</td></tr></thead>');
-			}
-			else {
-					document.write('<tr><th>' + "Product Revision" + '</th><td>' + json[j].st_Prod_Rev.trim() + '</td></tr></thead>');
-			}
-			if ( json[j].st_SerlNum == undefined || json[j].st_SerlNum.trim() === "") {
-					document.write('<tr><th>' + "Serial Number" + '</th><td>' + "N/A" +'</td></tr></thead>');
-			}
-			else {
-					document.write('<tr><th>' + "Serial Number" + '</th><td>' + json[j].st_SerlNum.trim() +'</td></tr></thead>');
-			}			
-			document.write('<tr><th>' + "Rebuild priority" + '</th><td>' + CntrlRePri(json[j].st_RebuildPriority) + '</td></tr></thead>');
-			document.write('<tr><th>' + "Internal Ports" + '</th><td>' + CheckUndefined(json[j].st_NumOfInt_Ports) + '</td></tr></thead>');
-			document.write('<tr><th>' + "Current Temperature" + '</th><td>' + CntrlTemp(json[j].st_Cur_Temp) + '</td></tr></thead>');
-			document.write("</table>");
-	}
+		document.write ("<br> </br>");
+		document.write("<table border=3; align='center'>");
+		document.write ('<tr><th>' + "Model" + '</th><td>' +  CntlrModel(json[j].st_Model) + '</td></tr></thead>' );
+		if ( json[j].st_FWRev == undefined || json[j].st_FWRev.trim() === "") {
+			document.write('<tr><th>' + "Firmware version" + '</th><td>' + "N/A" + '</td></tr></thead>');
+		}
+		else {
+			document.write('<tr><th>' + "Firmware version" + '</th><td>' + json[j].st_FWRev.trim() + '</td></tr></thead>');
+		}
+		document.write('<tr><th>' + "Controller Condition " + '</th><td>' + ConditionStat(json[j].st_Cond) + '</td></tr></thead>');
+		if (json[j].st_Prod_Rev == undefined || json[j].st_Prod_Rev.trim() == "") {
+			document.write('<tr><th>' + "Product Revision" + '</th><td>' + "N/A" + '</td></tr></thead>');
+		}
+		else {
+			document.write('<tr><th>' + "Product Revision" + '</th><td>' + json[j].st_Prod_Rev.trim() + '</td></tr></thead>');
+		}
+		if ( json[j].st_SerlNum == undefined || json[j].st_SerlNum.trim() === "") {
+			document.write('<tr><th>' + "Serial Number" + '</th><td>' + "N/A" +'</td></tr></thead>');
+		}
+		else {
+			document.write('<tr><th>' + "Serial Number" + '</th><td>' + json[j].st_SerlNum.trim() +'</td></tr></thead>');
+		}			
+		document.write('<tr><th>' + "Rebuild priority" + '</th><td>' + CntrlRePri(json[j].st_RebuildPriority) + '</td></tr></thead>');
+		document.write('<tr><th>' + "Internal Ports" + '</th><td>' + CheckUndefined(json[j].st_NumOfInt_Ports) + '</td></tr></thead>');
+		document.write('<tr><th>' + "Current Temperature" + '</th><td>' + CntrlTemp(json[j].st_Cur_Temp) + '</td></tr></thead>');
+		document.write("</table>");
 	}
 	document.write ("<br> </br>");
 

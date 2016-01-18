@@ -10,7 +10,7 @@ function Fan_Table() {
 
 
 	for(var j in json){
-	  if ( j != 0 && json[j].FanIndex !=undefined  && json[j].FanLocale !=undefined ) {
+	  if ( json[j].FanIndex !=undefined  && json[j].FanLocale !=undefined ) {
 		document.write('<tr><td>' + json[j].FanIndex + '</td><td>' + fanLoc(json[j].FanLocale)   + '</td><td>' + TypeOfFan(json[j].FanType) + '</td><td>' + PresentStat(json[j].FanPresent) +	'</td><td>' + fanplug(json[j].FanHotPlug) + '</td><td>' + fanSpd(json[j].FanSpeed) + '</td><td>' +  fanRedun(json[j].FanRedundant) + '</td></tr>' );
 		}
 	}

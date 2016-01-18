@@ -514,19 +514,19 @@ echo -ne "Progress: $(($1*100/$2))% (scanned $1 of $2 hosts)\r"
 # 161/udp open  snmp
 # | snmp-sysdescr: Integrated Lights-Out 4 1.30 Mar 18 2013
 # |_  System uptime: 40 days, 11:15:49.94 (349654994 timeticks)
-# MAC Address: 9C:8E:99:6E:0C:FA (Hewlett-Packard Enterprise Company)
+# MAC Address: 9C:8E:99:6E:0C:FA (Hewlett Packard Enterprise Company)
 #
 # Nmap scan report for 16.153.113.7
 # Host is up (0.00015s latency).
 # PORT    STATE  SERVICE
 # 161/udp closed snmp
-# MAC Address: 98:4B:E1:04:F8:7E (Hewlett-Packard Enterprise Company)
+# MAC Address: 98:4B:E1:04:F8:7E (Hewlett Packard Enterprise Company)
 #
 # Nmap scan report for 16.153.113.8
 # Host is up (0.00011s latency).
 # PORT    STATE         SERVICE
 # 161/udp open|filtered snmp
-# MAC Address: 3C:D9:2B:08:95:92 (Hewlett-Packard Enterprise Company)
+# MAC Address: 3C:D9:2B:08:95:92 (Hewlett Packard Enterprise Company)
 # ............................................
 # ............................................
 ##############################################################
@@ -885,13 +885,13 @@ if [ "x$(cat $NagiosIloCfgFile | grep -w "name generic-iLO-host")" = "x" ]; then
 fi
 write_nagios_host_section $1 $host_read_community
 
-if [ "x$(cat $NagiosIloCfgFile | grep "$host_group")" = "x" ]; then
+if [ "x$(grep -w -B 1 "$host_group" $NagiosIloCfgFile | grep "define hostgroup")" = "x" ]; then
 	# The specific host group is not created yet. 
 	# Just create a new one.
 	write_nagios_hostgroup_section "$host_group"
 else
 	# Find the starting line number for the specific host group
-	s_line=`grep -n -B 1 "$host_group" $NagiosIloCfgFile  | grep "define hostgroup" | head -n 1 | awk -F '-' '{print $1}'`
+	s_line=`grep -n -w -B 1 "$host_group" $NagiosIloCfgFile  | grep "define hostgroup" | head -n 1 | awk -F '-' '{print $1}'`
 
 	s_line=$(($s_line+2))
 

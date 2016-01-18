@@ -10,7 +10,7 @@ function Network_Table() {
 
 
 	for(var j in json){
-	  if ( j != 0 && json[j].NIPANam !=undefined && json[j].NIPANam !="" ) {
+	  if ( json[j].NIPANam !=undefined && json[j].NIPANam !="" ) {
 		document.write('<tr><td>' + NetPort(json[j].NIPAPort) + '</td><td>' + CheckUndefined(json[j].NIPANam) + '</td><td>' + NetworkStat(json[j].NIPAStatus)   + '</td><td>' + NetDupStat(json[j].NIPADuplexState) + '</td><td>' + NetIO(json[j].NIPAIoAddr) +	'</td><td>' + NetSlot(json[j].NIPASlot) + '</td><td>' + CheckUndefined(json[j].NIPAMACAddr) + '</td><td>' +  CheckUndefined(json[j].NIPAFWVer) + '</td></tr>' );
 		}
 	}

@@ -186,9 +186,9 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 NAGIOS3CONFDIR = /etc/nagios3/conf.d
-confddir = $(NAGIOS3CONFDIR)
-#confddir=$(NAGIOS3DIR)/conf.d
+confddir = $(prefix)/conf.d
 confd_DATA = generic-contact_nagios2.cfg
+EXTRA_DIST = $(confd_DATA)
 all: all-am
 
 .SUFFIXES:
@@ -338,7 +338,8 @@ info: info-am
 info-am:
 
 install-data-am: install-confdDATA
-
+	@$(NORMAL_INSTALL)
+	$(MAKE) $(AM_MAKEFLAGS) install-data-hook
 install-dvi: install-dvi-am
 
 install-dvi-am:
@@ -383,22 +384,23 @@ ps-am:
 
 uninstall-am: uninstall-confdDATA
 
-.MAKE: install-am install-strip
+.MAKE: install-am install-data-am install-strip
 
 .PHONY: all all-am check check-am clean clean-generic distclean \
 	distclean-generic distdir dvi dvi-am html html-am info info-am \
 	install install-am install-confdDATA install-data \
-	install-data-am install-dvi install-dvi-am install-exec \
-	install-exec-am install-html install-html-am install-info \
-	install-info-am install-man install-pdf install-pdf-am \
-	install-ps install-ps-am install-strip installcheck \
-	installcheck-am installdirs maintainer-clean \
+	install-data-am install-data-hook install-dvi install-dvi-am \
+	install-exec install-exec-am install-html install-html-am \
+	install-info install-info-am install-man install-pdf \
+	install-pdf-am install-ps install-ps-am install-strip \
+	installcheck installcheck-am installdirs maintainer-clean \
 	maintainer-clean-generic mostlyclean mostlyclean-generic pdf \
 	pdf-am ps ps-am uninstall uninstall-am uninstall-confdDATA
 
-#EXTRA_DIST = $(confd_DATA)
-#if [ -d $(NAGIOS3CONFDIR) ] ; then $(INSTALL) -m 644 $(DEB_BUILD_DIR)/conf.d/generic-contact_nagios2.cfg $(NAGIOS3CONFDIR) ; fi
-if [ -d $(NAGIOS3CONFDIR) ] ; EXTRA_DIST = $(confd_DATA)  ; fi
+install-data-hook:
+	if [  -d $(NAGIOS3CONFDIR) ] ; then \
+		 cp  $(confddir)/$(confd_DATA) $(NAGIOS3CONFDIR) \
+        ;  fi
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
