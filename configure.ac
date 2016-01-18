@@ -16,7 +16,7 @@ AC_PREFIX_DEFAULT(/usr/local/nagios)
 AC_PROG_CC
 
 # Checks for libraries.
-AC_CHECK_LIB(snmp, snmp_sess_init, [LIBS="$LIBS -lsnmp"], [AC_MSG_ERROR(Could not find snmp library.)])
+AC_CHECK_LIB(netsnmp, snmp_sess_init, [LIBS="$LIBS -lnetsnmp"], [AC_MSG_ERROR(Could not find net-snmp library.)])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h unistd.h])
