@@ -499,7 +499,7 @@ function cfg_check_interval()
 			break
 		else
 			if [[ $temp =~ ^[0-9]+$ ]]; then
-				check_interval=5
+				check_interval=$temp
 				break;
 			else
 				displayIntro "\n\t\"$temp\" is not number" $TTY NOCLSCR
