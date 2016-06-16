@@ -20,7 +20,6 @@
 #   51 Franklin Street, Fifth Floor
 #   Boston, MA 02110-1301, USA.
 #
-#  Written by Maple Yang <maple.yang@hpe.com>.
 
 CLEARSCREEN=$(/usr/bin/tput clear)
 Nagios_iLO_Plugins_Path=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
@@ -709,7 +708,7 @@ if [ -f $NAGIOS_INST_PATH/$config_gen_file ]; then
 		fi
         	echo "ACTIVE_DISCOVERY  $ACTIVE_DISCOVERY" >> $nagios_hpilo_cfg_file
         	for((idx=0;idx<${#hostgroup_name[@]};idx++)); do
-			if [ "x${hostgrp_read_comm[$host_entries]}" = "x" ]; then
+			if [ "x${hostgrp_read_comm[$idx]}" = "x" ]; then
                 		echo "HOSTGROUP: ${hostgroup_name[$idx]},${hostgroup_ip[$idx]}" >> $nagios_hpilo_cfg_file
 			else
                 		echo "HOSTGROUP: ${hostgroup_name[$idx]},${hostgroup_ip[$idx]},${hostgrp_read_comm[$idx]},${hostgrp_trap_comm[$idx]}" >> $nagios_hpilo_cfg_file
