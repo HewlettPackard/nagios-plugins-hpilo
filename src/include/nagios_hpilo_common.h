@@ -1,5 +1,5 @@
 /* nagios_hpilo_common.h -- types and prototypes used by nagios iLO plug-in 
-   (C) Copyright [2015] Hewlett Packard Enterprise Development Company, L.P.
+   (C) Copyright [2016] Hewlett Packard Enterprise Development Company, L.P.
 
    This program is free software; you can redistribute it and/or modify 
    it under the terms of version 2 of the GNU General Public License as 
@@ -46,6 +46,14 @@
 
 #define NUM_ELEMENTS(array) \
 	(sizeof(array) / sizeof(typeof(array[0])))
+
+/* Option operation.  */
+enum
+{
+  NAGIOS_OPTION_NOP,
+  NAGIOS_OPTION_PRINT_VERSION,
+  NAGIOS_OPTION_PRINT_HELP
+};
 
 /* Return status defined by Nagios.  */
 enum Nagios_status

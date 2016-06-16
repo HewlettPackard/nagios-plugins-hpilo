@@ -4,7 +4,7 @@
 #			 received from HP ProLiant Server and to 
 #			 update the corresponding status in real-time
 #	        
-#  (C) Copyright [2015] Hewlett Packard Enterprise Development Company, L.P.
+#  (C) Copyright [2016] Hewlett Packard Enterprise Development Company, L.P.
 #
 #  This program is free software; you can redistribute it and/or modify 
 #  it under the terms of version 2 of the GNU General Public License as 
@@ -22,7 +22,7 @@
 #   51 Franklin Street, Fifth Floor
 #   Boston, MA 02110-1301, USA.  
 #
-#   Written by Adrian Huang <adrian.huang@hp.com>.
+#   Written by Maple Yang <maple.yang@hpe.com>.
 
 prefix=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
@@ -31,9 +31,10 @@ NagiosHpiloEngine="nagios_hpeilo_engine"
 
 HpiloLogFile="/var/log/nagios_hpeilo_traps.log"
 HpiloSnmpComm="public" # hpeilo ilo community string
+HpiloSnmpV3=":SNMPV3" # SNMPv3 didn't need community string
 HpiloServices=("System Status" "Fans" "Memory" "Network" "Power Supplies" "Processors" "Storage" "Temperatures")
 
-SnmpTrapOid="iso.3.6.1.6.3.1.1.4.1.0"
+SnmpTrapOid=("iso.3.6.1.6.3.1.1.4.1.0" "SNMPv2-MIB::snmpTrapOID.0")
 
 HlthStatusChgTrap="HlthStuatsChangeTrap"
 
@@ -145,8 +146,8 @@ function update_hlth_status () {
 		
 	# The oid_idx must be increased by 1 since the oid index of the 
 	# NagiosHpiloEngine is started from 1 rather than 0. 
-	write_log "$NagiosLibexec/$NagiosHpiloEngine -H $IloIP -C $HpiloSnmpComm -o $((oid_idx+1))" 
-	output=`$NagiosLibexec/$NagiosHpiloEngine -H $IloIP -C $HpiloSnmpComm -o $((oid_idx+1))`
+	write_log "$NagiosLibexec/$NagiosHpiloEngine -H $IloIP -C \"$HpiloSnmpComm\" -o $((oid_idx+1))" 
+	output=`$NagiosLibexec/$NagiosHpiloEngine -H $IloIP -C "$HpiloSnmpComm" -o $((oid_idx+1))`
 
 	nagios_service_status=$?
 
@@ -174,8 +175,8 @@ function update_hlth_status_from_status_array () {
 
 	# The oid_idx must be increased by 1 since the oid index of the 
 	# NagiosHpiloEngine is started from 1 rather than 0. 
-	write_log "$NagiosLibexec/$NagiosHpiloEngine -H $1 -C $2 -o $((oid_idx))" 
-	output=`$NagiosLibexec/$NagiosHpiloEngine -H $1 -C $2 -o $((oid_idx))`
+	write_log "$NagiosLibexec/$NagiosHpiloEngine -H $1 -C \"$2\" -o $((oid_idx))" 
+	output=`$NagiosLibexec/$NagiosHpiloEngine -H $1 -C "$2" -o $((oid_idx))`
 	nagios_service_status=$?
 	write_log "${HpiloServices[0]} nagios_service_status : $nagios_service_status - $output"
 	IFS=';' read -a hlth_status_array <<< "$output"	
@@ -213,7 +214,7 @@ function update_hlth_status_from_status_array () {
 		if [ "$status_value" == "1" ] || [ "$status_value" == "2" ]; then
 			case "$xy" in
 				[1] | [4] | [6])
-					status_key=`$NagiosLibexec/$NagiosHpiloEngine -H $1 -C $2 -o $((xy+1))`
+					status_key=`$NagiosLibexec/$NagiosHpiloEngine -H $1 -C "$2" -o $((xy+1))`
 					nagios_service_status=$?
 					;;
 				*)
@@ -280,7 +281,9 @@ while [ "x$1" != "x" ]; do
 		# Get the community string
 		shift
 		comm_str=$1
-
+                if [ $comm_str = $HpiloSnmpV3 ]; then
+                        comm_str=" "
+                fi
 		;;
 
 		-o)
@@ -316,13 +319,20 @@ then
 	read IloIP 
 	read protocol
 
+	write_log "IloIP=$IloIP , protocol=$protocol"
 # Get the iLO trap ID 
 	while read oid val
 	do
-		if [ "$oid" = "$SnmpTrapOid" ]; then
-			# get the iLO trap ID
-			IloTrapNumber=`echo $val | awk -F . '{print $NF}'`
-			break;
+		for((idx=0;idx<${#SnmpTrapOid[@]};idx++)) 
+		do
+			if [ "$oid" = "${SnmpTrapOid[idx]}" ]; then
+				# get the iLO trap ID
+				IloTrapNumber=`echo $val | awk -F . '{print $NF}'`
+				break
+			fi
+		done
+		if [ "x$IloTrapNumber" != "x" ]; then
+			break
 		fi
 	done
 
@@ -358,7 +368,7 @@ else
 	write_log "host_ip : $host_ip  comm_str: $comm_str  oid_idx: $oid_id"
 	#if [ "$oid_id" = "1" ]; then
 	write_log "Active Schedule Mode"
-		update_hlth_status_from_status_array $host_ip $comm_str $oid_id
+		update_hlth_status_from_status_array $host_ip "$comm_str" $oid_id
 		printf "$output\n"
 		exit $nagios_service_status
 	#fi

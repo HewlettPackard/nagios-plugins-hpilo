@@ -21,6 +21,17 @@
 /* Written by Adrian Huang <adrian.huang@hp.com>.  */
 
 #include "nagios_hpilo_snmp.h"
+#include "ilo-credit-store.h"
+#include "base64.h"
+
+#define USE_SNMP_VERSION_3
+#ifdef USE_SNMP_VERSION_3
+//const char *auth_v3_passphrase = "hp123456";
+const char *auth_v3_passphrase = "hp123456";
+//const char *priv_v3_passphrase = "hp123456";
+const char *priv_v3_passphrase = "hp123456";
+#endif
+
 extern struct inst_list *list;
 /* Return TRUE if the 'str' contains the hexadecimal character.  */
 
@@ -245,7 +256,6 @@ init_options (struct ilo_snmp_options *options)
   options->community = NULL;
 
   options->port = NAGIOS_ILO_SNMP_PORT;
-  options->version = SNMP_VERSION_2c;
   options->timeout = NAGIOS_ILO_SNMP_TIMEOUT;
   options->retries = NAGIOS_ILO_SNMP_RETRIES;
   options->oid_idx = 0;
@@ -286,7 +296,6 @@ init_priv_data (struct ilo_snmp_priv *priv_ptr)
   priv_ptr->oid_list = NULL;
 
   init_options(&priv_ptr->options);
-
   return ;
 }
 
@@ -301,12 +310,90 @@ int init_ilo_snmp_session(struct ilo_snmp_priv * priv_ptr)
   init_snmp("Nagios_hpilo_snmp");
 
   snmp_sess_init(&session);
+
   session.peername = strdup(priv_ptr->options.host);
-  session.community = strdup(priv_ptr->options.community);
-  session.community_len = strlen((char *) session.community);
-  session.version = priv_ptr->options.version;
   session.timeout = priv_ptr->options.timeout;
   session.retries = priv_ptr->options.retries;
+
+  //printf("community: %s",priv_ptr->options.community);
+
+  if (strcmp(priv_ptr->options.community," ") != 0 && strcmp(priv_ptr->options.community,":SNMPV3") != 0){
+    //printf("snmp_version: SNMP_VERSION_2c\n");
+    session.version = SNMP_VERSION_2c;
+    session.community = strdup(priv_ptr->options.community);
+    session.community_len = strlen((char *) session.community);
+  } else {
+    char *value, *iterate;
+    char all_cred[1024]={0};
+    const char *delim = ",";
+    size_t all_len;
+
+    //printf("snmp_version: SNMP_VERSION_3\n");
+    session.version = SNMP_VERSION_3;
+    //options->securityName = "hpeilo";
+    //options->isAuthoritative = 0;
+
+    value=get_cred(priv_ptr->options.host);
+    int ret = base64_decode(value, strlen(value), all_cred, &all_len);
+    if (ret != 0) {
+      exit(NAGIOS_UNKNOWN);
+    }
+
+    iterate = strtok(all_cred, delim);
+    if (iterate != NULL) {
+      /* set the SNMPv3 user name */
+      session.securityName = strdup(iterate);
+  
+    //session.securityName = strdup("hpeilo");
+    session.securityNameLen = strlen((char *) session.securityName);
+
+    /* set the security level to authenticated, but not encrypted */
+    session.securityLevel = SNMP_SEC_LEVEL_AUTHPRIV;
+
+    iterate = strtok(NULL, delim);
+    /* set the authentication method */
+    if (strcmp(iterate,"MD5") == 0) 
+      session.securityAuthProto = usmHMACMD5AuthProtocol;
+    else
+      session.securityAuthProto = usmHMACSHA1AuthProtocol;
+
+    session.securityAuthProtoLen = sizeof(SNMP_DEFAULT_AUTH_PROTO)/sizeof(oid);
+    session.securityAuthKeyLen = USM_AUTH_KU_LEN;
+  
+    iterate = strtok(NULL, delim);
+    if (generate_Ku(session.securityAuthProto,
+                    session.securityAuthProtoLen,
+                    (u_char *) iterate, strlen(iterate),
+                    session.securityAuthKey,
+                    &session.securityAuthKeyLen) != SNMPERR_SUCCESS) {
+      snmp_perror("securityAuthKey");
+      snmp_log(LOG_ERR,
+               "Error generating Ku from authentication pass phrase. \n");
+      exit(1);
+    }
+
+    /* set the privacy method */
+    iterate = strtok(NULL, delim);
+    if (strcmp(iterate,"DES") == 0) 
+      session.securityPrivProto = usmDESPrivProtocol;
+    else
+      session.securityPrivProto = usmAESPrivProtocol;
+    session.securityPrivProtoLen = sizeof(SNMP_DEFAULT_PRIV_PROTO)/sizeof(oid);
+    session.securityPrivKeyLen = USM_PRIV_KU_LEN;
+
+    iterate = strtok(NULL, delim);
+    if (generate_Ku(session.securityAuthProto,
+                    session.securityAuthProtoLen,
+                    (u_char *) iterate, strlen(iterate),
+                    session.securityPrivKey,
+                    &session.securityPrivKeyLen) != SNMPERR_SUCCESS) {
+      snmp_perror("securityPrivKey");
+      snmp_log(LOG_ERR,
+               "Error generating Ku from private pass phrase. \n");
+      exit(1);
+    }
+    }
+  }
 
   priv_ptr->session = snmp_open(&session);
 
