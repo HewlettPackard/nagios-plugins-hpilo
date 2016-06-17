@@ -5,7 +5,7 @@ AC_PREREQ([2.69])
 AC_INIT(nagios-plugins-hpeilo, 1.5.1, Linux_SWdeliverables@groups.ext.hpe.com)
 AC_CONFIG_SRCDIR([src/hpeilo_engine/nagios_hpilo_engine.c])
 AC_CONFIG_HEADERS([config.h])
-AM_INIT_AUTOMAKE(nagios-plugins-hpeilo, 1.5.0)
+AM_INIT_AUTOMAKE(nagios-plugins-hpeilo, 1.5.1)
 AC_CONFIG_MACRO_DIR([m4])
 
 m4_include([m4/m4-ax_compare_version.m4])

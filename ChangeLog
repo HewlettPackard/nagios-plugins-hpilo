@@ -8,4 +8,6 @@
 
 1.4.0 Removed auto configuration of passive discovery on installation and added configuration script for easy configuration after installation.
 
-1.5.0 Support Nagios 4.x and notification Email. Enhance "Unknown" status in nagios webpage and Enhance Service Group Funtion & Service Detail in nagios configure file. Adddiscovery review in configure process
+1.5.0 Support Nagios 4.x and notification Email. Enhance "Unknown" status in nagios webpage and Enhance Service Group Funtion & Service Detail in nagios configure file. Add discovery review in configure process
+
+1.5.1 Support SNMPv3 and fix bugs. 
