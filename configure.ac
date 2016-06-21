@@ -1,7 +1,6 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.69])
 AC_INIT(nagios-plugins-hpeilo, 1.5.1, Linux_SWdeliverables@groups.ext.hpe.com)
 AC_CONFIG_SRCDIR([src/hpeilo_engine/nagios_hpilo_engine.c])
 AC_CONFIG_HEADERS([config.h])
