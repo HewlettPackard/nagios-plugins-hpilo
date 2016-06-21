@@ -1,8 +1,14 @@
 /* config.h.  Generated from config.h.in by configure.  */
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define to 1 if you have the <dlfcn.h> header file. */
+#define HAVE_DLFCN_H 1
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
+
+/* Define to 1 if you have the `tdb' library (-ltdb). */
+#define HAVE_LIBTDB 1
 
 /* Define to 1 if your system has a GNU libc compatible `malloc' function, and
    to 0 otherwise. */
@@ -41,6 +47,10 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
+#define LT_OBJDIR ".libs/"
+
 /* Name of package */
 #define PACKAGE "nagios-plugins-hpeilo"
 
@@ -51,22 +61,19 @@
 #define PACKAGE_NAME "nagios-plugins-hpeilo"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "nagios-plugins-hpeilo 1.5.0"
+#define PACKAGE_STRING "nagios-plugins-hpeilo 1.5.1"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "nagios-plugins-hpeilo"
 
-/* Define to the home page for this package. */
-#define PACKAGE_URL ""
-
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.5.0"
+#define PACKAGE_VERSION "1.5.1"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
 
 /* Version number of package */
-#define VERSION "1.5.0"
+#define VERSION "1.5.1"
 
 /* Define to rpl_malloc if the replacement function should be used. */
 /* #undef malloc */

@@ -22,7 +22,11 @@
         $ip=$_GET["ip"];
         $comm=$_GET["comm"];
         $id=$_GET["id"];
+        if ( $comm != "_SNMPV3") {
         $cmd="./nagios_hpeilo_engine -H $ip -C $comm -o $id -J";
+        } else {
+        $cmd="./nagios_hpeilo_engine -H $ip -C \" \" -o $id -J";
+        }
         $ret = exec($cmd,$output);
         echo join("\n",$output);
 ?>

@@ -106,14 +106,6 @@ enum
   ILO_NIC_MIB_COND = 14,
 };
 
-/* Option operation.  */
-enum 
-{
-  NAGIOS_OPTION_NOP,
-  NAGIOS_OPTION_PRINT_VERSION,
-  NAGIOS_OPTION_PRINT_HELP
-};
-
 /* This data structure is used to store the different type associated with the
    different get_status_str_fn_ptr function.   */
 struct ilo_get_status_str_entry 
