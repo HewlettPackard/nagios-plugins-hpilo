@@ -19,7 +19,7 @@ AC_PROG_LIBTOOL
 LT_INIT
 
 # Checks for libraries.
-AC_CHECK_LIB(netsnmp, snmp_sess_init, [LIBS="$LIBS -lnetsnmp"], [AC_MSG_ERROR(Could not find net-snmp library.)])
+AC_CHECK_LIB(netsnmp, snmp_sess_init, [LIBS="$LIBS -lnetsnmp"], [AC_MSG_ERROR(Could not find net-snmp development library.)])
 AC_CHECK_LIB(tdb, tdb_open, , AC_MSG_ERROR([tdb library is required.]))
 
 # Checks for header files.
