@@ -15407,7 +15407,7 @@ $as_echo "$ac_cv_lib_netsnmp_snmp_sess_init" >&6; }
 if test "x$ac_cv_lib_netsnmp_snmp_sess_init" = x""yes; then
   LIBS="$LIBS -lnetsnmp"
 else
-  { { $as_echo "$as_me:$LINENO: error: Could not find net-snmp library." >&5
+  { { $as_echo "$as_me:$LINENO: error: Could not find net-snmp development library." >&5
 $as_echo "$as_me: error: Could not find net-snmp library." >&2;}
    { (exit 1); exit 1; }; }
 fi
@@ -17289,7 +17289,8 @@ $debug ||
 if test -n "$CONFIG_FILES"; then
 
 
-ac_cr=''
+ac_cr='
+'
 ac_cs_awk_cr=`$AWK 'BEGIN { print "a\rb" }' </dev/null 2>/dev/null`
 if test "$ac_cs_awk_cr" = "a${ac_cr}b"; then
   ac_cs_awk_cr='\\r'
