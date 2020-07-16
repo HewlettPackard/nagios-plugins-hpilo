@@ -22,7 +22,7 @@
         $ip=$_GET["ip"];
         $comm=$_GET["comm"];
         $id=$_GET["id"];
-        $cmd="./nagios_hpeilo_engine -H $ip -C $comm -o $id -J";
+        $cmd=escapeshellcmd("./nagios_hpeilo_engine -H $ip -C $comm -o $id -J");
         $ret = exec($cmd,$output);
         echo join("\n",$output);
 ?>
