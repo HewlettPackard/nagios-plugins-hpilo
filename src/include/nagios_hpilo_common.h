@@ -76,7 +76,7 @@ struct inst {
  };
 
 /* Data structure to create instances */
-struct inst_list {
+extern struct inst_list {
 	int inst_count; /*number of instances*/
 	struct inst *obj; /*Instance List*/
 }*glist;
